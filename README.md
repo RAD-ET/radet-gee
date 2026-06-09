@@ -13,6 +13,31 @@ This repository provides a Google Earth Engine (Python API) implementation of th
 
 **Version note:** RADET v0.1.0 corresponds to the version used in the RSE publication: [Kim et al., 2026](https://doi.org/10.1016/j.rse.2026.115510)
 
+## How to Cite
+
+If you use RADET in your work, please cite the paper:
+
+> Kim, Y., Huntington, J. L., Comini de Andrade, B., Johnson, M. S., Volk, J. M., Majumdar, S., Morton, C., & ReVelle, P. (2026). Thermodynamically constrained surface energy balance using medium-resolution remote sensing for efficient evapotranspiration mapping. *Remote Sensing of Environment*, 344, 115510. https://doi.org/10.1016/j.rse.2026.115510
+
+<details>
+<summary>BibTeX</summary>
+
+```bibtex
+@article{kim2026radet,
+  title   = {Thermodynamically constrained surface energy balance using medium-resolution remote sensing for efficient evapotranspiration mapping},
+  author  = {Kim, Y. and Huntington, J. L. and Comini de Andrade, B. and Johnson, M. S. and Volk, J. M. and Majumdar, S. and Morton, C. and ReVelle, P.},
+  journal = {Remote Sensing of Environment},
+  volume  = {344},
+  pages   = {115510},
+  year    = {2026},
+  doi     = {10.1016/j.rse.2026.115510}
+}
+```
+
+</details>
+
+You can also cite the software release via the [Zenodo DOI](https://doi.org/10.5281/zenodo.18225224).
+
 ## Model Design
 
 The primary component of the RADET model is the Image() class. The Image class can be used to compute a single ET image from a single input image.  The Image class should generally be instantiated from an Earth Engine Landsat image using the collection specific methods listed below.  ET image collections can be built by computing ET in a function that is mapped over a collection of input images. 
