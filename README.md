@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
 [![GEE](https://img.shields.io/badge/Google%20Earth%20Engine-4285F4?logo=google-earth&logoColor=white)](https://earthengine.google.com/)
 [![Release](https://img.shields.io/github/v/release/RAD-ET/radet-gee?include_prereleases&sort=semver)](https://github.com/RAD-ET/radet-gee/releases)
-[![Paper DOI](https://img.shields.io/badge/Paper-10.1016%2Fj.rse.2026.115510-orange)](https://doi.org/10.1016/j.rse.2026.115510)
+[![Paper DOI](https://img.shields.io/badge/Paper-10.1016%2Fj.rse.2026.115510-green)](https://doi.org/10.1016/j.rse.2026.115510)
 [![Zenodo DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18225224.svg)](https://doi.org/10.5281/zenodo.18225224)
 
 **WARNING:** This code is in development and may change without notice.
@@ -146,4 +146,4 @@ See the [Earth Engine Python installation guide](https://developers.google.com/e
 
 ## References
 
-Kim, Y., Huntington, J. L., Comini de Andrade, B., Johnson, M. S., Volk, J. M., Majumdar, S., Morton, C., & ReVelle, P. (2026). Thermodynamically constrained surface energy balance using medium-resolution remote sensing for efficient evapotranspiration mapping. *Remote Sensing of Environment*, 344, 115510. https://doi.org/https://doi.org/10.1016/j.rse.2026.115510
+Kim, Y., Huntington, J. L., Comini de Andrade, B., Johnson, M. S., Volk, J. M., Majumdar, S., Morton, C., & ReVelle, P. (2026). Thermodynamically constrained surface energy balance using medium-resolution remote sensing for efficient evapotranspiration mapping. *Remote Sensing of Environment*, 344, 115510. https://doi.org/10.1016/j.rse.2026.115510

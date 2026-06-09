@@ -9,4 +9,4 @@ This folder contains example notebooks demonstrating RADET model usage.
 
 ## References
 
-Kim, Y., Huntington, J. L., Comini de Andrade, B., Johnson, M. S., Volk, J. M., Majumdar, S., Morton, C., & ReVelle, P. (2026). Thermodynamically constrained surface energy balance using medium-resolution remote sensing for efficient evapotranspiration mapping. *Remote Sensing of Environment*, 344, 115510. https://doi.org/https://doi.org/10.1016/j.rse.2026.115510
+Kim, Y., Huntington, J. L., Comini de Andrade, B., Johnson, M. S., Volk, J. M., Majumdar, S., Morton, C., & ReVelle, P. (2026). Thermodynamically constrained surface energy balance using medium-resolution remote sensing for efficient evapotranspiration mapping. *Remote Sensing of Environment*, 344, 115510. https://doi.org/10.1016/j.rse.2026.115510
