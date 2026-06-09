@@ -4,8 +4,9 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
 [![GEE](https://img.shields.io/badge/Google%20Earth%20Engine-4285F4?logo=google-earth&logoColor=white)](https://earthengine.google.com/)
 ![Status](https://img.shields.io/badge/Status-Beta-yellow)
-[![EarthArXiv Preprint](https://img.shields.io/badge/EarthArXiv-10.31223%2FX51B4P-blue)](https://doi.org/10.31223/X51B4P)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18225224.svg)](https://doi.org/10.5281/zenodo.18225224)
+[![Release](https://img.shields.io/github/v/release/RAD-ET/radet-gee?include_prereleases&sort=semver)](https://github.com/RAD-ET/radet-gee/releases)
+[![Paper DOI](https://img.shields.io/badge/Paper-10.1016%2Fj.rse.2026.115510-orange)](https://doi.org/10.1016/j.rse.2026.115510)
+[![Zenodo DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18225224.svg)](https://doi.org/10.5281/zenodo.18225224)
 
 **WARNING:** This code is in development and may change without notice.
 
