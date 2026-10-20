@@ -325,8 +325,11 @@ def test_Image_elevation_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
+        # CGM - Testing against specific annual NLCD image year versions
+        #   will likely fail in the future when a new version is released,
+        #   since the old versions are not kept in the awesome gee catalog
         [
-            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2020_CU_C1V1',
+            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2020_CU_C1V2',
             TEST_POINT, 82
         ],
         ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', TEST_POINT, 82],
@@ -558,7 +561,7 @@ def test_Image_from_landsat_c2_sr_exception():
 
 
 def test_Image_from_landsat_c2_sr_scaling():
-    """Test if Landsat SR images images are being scaled"""
+    """Test if Landsat SR images are being scaled"""
     sr_img = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716')
     input_img = (
         ee.Image.constant([10909, 10909, 10909, 10909, 10909, 10909, 10909, 44177.6, 21824, 0, 9800])
