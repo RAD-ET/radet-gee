@@ -27,7 +27,8 @@ def lazy_property(fn):
 class Image:
     """Google Earth Engine - RADET for Landsat image"""
 
-    _C2_LST_CORRECT = True  # Enable (True) C2 LST correction to recalculate LST
+    _C2_LST_CORRECT = True  # Enable (True) to recalculate LST with emissivity correction
+    _C2_EMISSIVITY_CORRECT = False  # Enable (True) to apply emissivity correction
 
     def __init__(
         self,
@@ -329,11 +330,24 @@ class Image:
         else:
             lst = prep_image.select(["lst"])
 
+        # Check if passing c2_emissivity_correct arguments
+        if "c2_emissivity_correct" in kwargs.keys():
+            assert isinstance(kwargs["c2_emissivity_correct"], bool), "selection type must be a boolean"
+            # Remove from kwargs since it is not a valid argument for Image init
+            c2_emissivity_correct = kwargs.pop("c2_emissivity_correct")
+        else:
+            c2_emissivity_correct = cls._C2_EMISSIVITY_CORRECT
+
+        if c2_emissivity_correct:
+            emissivity = landsat.emissivity_corrected(sr_image)
+        else:
+            emissivity = prep_image.select(["ASTER_GED_emissivity"], ["emissivity"])
+
         # Build the input image from the components
         input_image = ee.Image(
             [
                 albedo,
-                prep_image.select(["ASTER_GED_emissivity"], ["emissivity"]),
+                emissivity,
                 landsat.lai(prep_image),
                 lst.rename(["lst"]),
                 landsat.ndvi(prep_image),

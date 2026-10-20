@@ -330,3 +330,48 @@ def test_water_mask(product, xy, expected):
 def test_Image_meteorology_source_sources_exception():
     with pytest.raises(ValueError):
         utils.getinfo(landsat.water_mask(product=''))
+
+
+def test_Image_emissivity_corrected_band_name():
+    input_img = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_030036_20210725')
+    assert landsat.emissivity_corrected(input_img).getInfo()['bands'][0]['id'] == 'emissivity'
+
+
+# TODO: Consider reworking this test to compare the before and after value
+#   instead of testing the values themselves
+@pytest.mark.parametrize(
+    "image_id, xy, expected, uncorrected",
+    [
+        # First two points are in the same field but the second one is in an
+        #   area of bad emissivity data and needs correction
+        ['LANDSAT/LC08/C02/T1_L2/LC08_030036_20210725', [-102.266679, 34.368470], 0.9824, 0.9511],
+        ['LANDSAT/LC08/C02/T1_L2/LC08_030036_20210725', [-102.266754, 34.367682], 0.9844, 0.9511],
+        # This point is just outside the field and should stay the same
+        ['LANDSAT/LC08/C02/T1_L2/LC08_030036_20210725', [-102.269769, 34.366115], 0.9761, 0.9707],
+        # These two points are in the ASTER GED hole and have no L2 temperature
+        # The first his a high NDVI field, the second is a low NDVI field
+        ['LANDSAT/LC08/C02/T1_L2/LC08_031034_20160702', [-102.08284, 37.81728], 0.9741, None],
+        ['LANDSAT/LC08/C02/T1_L2/LC08_031034_20160702', [-102.04696, 37.81796], 0.9816, None],
+        # This scene (and path/row) is having issues when used in the LST sharpening
+        # Test four points in each quadrant of the scene and one point outside
+        ['LANDSAT/LC08/C02/T1_L2/LC08_035031_20160714', [-107.4, 42.2], 0.9671, 0.9631],
+        ['LANDSAT/LC08/C02/T1_L2/LC08_035031_20160714', [-106.3, 42.0], 0.9678, 0.9621],
+        ['LANDSAT/LC08/C02/T1_L2/LC08_035031_20160714', [-107.4, 41.5], 0.9808, 0.9805],
+        ['LANDSAT/LC08/C02/T1_L2/LC08_035031_20160714', [-106.5, 41.3], 0.9794, 0.9804],
+        ['LANDSAT/LC08/C02/T1_L2/LC08_035031_20160714', [-107.9, 42.6], None, None],
+        # This scene will not run if matching collections are built using the LANDSAT_SCENE_ID
+        #   since the ID has a different version number in the TOA and radiance collections
+        ['LANDSAT/LC09/C02/T1_L2/LC09_035025_20230608', [-103.5, 50.4], 0.9799, 0.9802],
+        # Test scenes used in image.py test
+        # CGM - Not sure why they are being corrected so much from ST_EMIS value
+        ['LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716', [-121.668, 38.905], 0.99, 0.9713],
+        ['LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716', [-121.650, 38.913], 0.9679, 0.9752],
+    ]
+)
+def test_landsat_emissivity_corrected_values(image_id, xy, expected, uncorrected, tol=0.0001):
+    output_img = landsat.emissivity_corrected(ee.Image(image_id))
+    corrected = utils.point_image_value(output_img, xy, scale=30)
+    if expected is None:
+        assert corrected['emissivity'] is None
+    else:
+        assert abs(corrected['emissivity'] - expected) <= tol

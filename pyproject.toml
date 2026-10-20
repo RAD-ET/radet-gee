@@ -1,6 +1,6 @@
 [project]
 name = "radet"
-version = "0.1.0"
+version = "0.2.0"
 authors = [
     { name = "Yeonuk Kim", email = "yeonuk.kim@dri.edu" },
 ]
@@ -15,14 +15,14 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "earthengine-api >= 1.5.2",
+    "earthengine-api >= 1.7.4",
     "openet-core >= 0.7.0",
     "openet-refet-gee >= 0.6.2",
     "python-dateutil",
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/DRI-RAD/radet-beta"
+"Homepage" = "https://github.com/RAD-ET/radet-gee"
 
 [build-system]
 requires = ["setuptools>=61.0"]
