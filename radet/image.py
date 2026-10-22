@@ -314,8 +314,7 @@ class Image:
         #     cloudmask_args["shadow_flag"] = True
         # if "snow_flag" not in cloudmask_args.keys():
         #     cloudmask_args["snow_flag"] = True
-        # cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(
-        #     sr_image, **cloudmask_args)
+        # cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(sr_image, **cloudmask_args)
 
         # Check if passing c2_lst_correct arguments
         if "c2_lst_correct" in kwargs.keys():
@@ -339,7 +338,7 @@ class Image:
             c2_emissivity_correct = cls._C2_EMISSIVITY_CORRECT
 
         if c2_emissivity_correct:
-            emissivity = landsat.emissivity_corrected(sr_image)
+            emissivity = openet.core.common.landsat_c2_sr_emissivity_correct(sr_image)
         else:
             emissivity = prep_image.select(["ASTER_GED_emissivity"], ["emissivity"])
 
