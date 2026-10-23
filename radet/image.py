@@ -27,7 +27,8 @@ def lazy_property(fn):
 class Image:
     """Google Earth Engine - RADET for Landsat image"""
 
-    _C2_LST_CORRECT = True  # Enable (True) C2 LST correction to recalculate LST
+    _C2_LST_CORRECT = True  # Enable (True) to recalculate LST with emissivity correction
+    _C2_EMISSIVITY_CORRECT = True  # Enable (True) to apply emissivity correction
 
     def __init__(
         self,
@@ -59,7 +60,7 @@ class Image:
         solar_radiation_source : {"IDAHO_EPSCOR/GRIDMET"}
             Solar radiation source collection ID or keyword.
         landcover_source : {"projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER",
-                            "projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2023_CU_C1V1"}
+                            "projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2023_CU_C1V2"}
             Land cover source collection or image ID.
             The default is "projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER".
         elevation_source : str, ee.Image
@@ -313,8 +314,7 @@ class Image:
         #     cloudmask_args["shadow_flag"] = True
         # if "snow_flag" not in cloudmask_args.keys():
         #     cloudmask_args["snow_flag"] = True
-        # cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(
-        #     sr_image, **cloudmask_args)
+        # cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(sr_image, **cloudmask_args)
 
         # Check if passing c2_lst_correct arguments
         if "c2_lst_correct" in kwargs.keys():
@@ -329,11 +329,24 @@ class Image:
         else:
             lst = prep_image.select(["lst"])
 
+        # Check if passing c2_emissivity_correct arguments
+        if "c2_emissivity_correct" in kwargs.keys():
+            assert isinstance(kwargs["c2_emissivity_correct"], bool), "selection type must be a boolean"
+            # Remove from kwargs since it is not a valid argument for Image init
+            c2_emissivity_correct = kwargs.pop("c2_emissivity_correct")
+        else:
+            c2_emissivity_correct = cls._C2_EMISSIVITY_CORRECT
+
+        if c2_emissivity_correct:
+            emissivity = openet.core.common.landsat_c2_sr_emissivity_correct(sr_image)
+        else:
+            emissivity = prep_image.select(["ASTER_GED_emissivity"], ["emissivity"])
+
         # Build the input image from the components
         input_image = ee.Image(
             [
                 albedo,
-                prep_image.select(["ASTER_GED_emissivity"], ["emissivity"]),
+                emissivity,
                 landsat.lai(prep_image),
                 lst.rename(["lst"]),
                 landsat.ndvi(prep_image),

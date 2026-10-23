@@ -1,4 +1,5 @@
 import ee
+import openet.core.landsat
 
 
 def evi2(landsat_image):

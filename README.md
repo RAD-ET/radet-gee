@@ -1,15 +1,42 @@
-# RADET - beta
+# RADET - gee
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
 [![GEE](https://img.shields.io/badge/Google%20Earth%20Engine-4285F4?logo=google-earth&logoColor=white)](https://earthengine.google.com/)
-![Status](https://img.shields.io/badge/Status-Beta-yellow)
-[![EarthArXiv Preprint](https://img.shields.io/badge/EarthArXiv-10.31223%2FX51B4P-blue)](https://doi.org/10.31223/X51B4P)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18225224.svg)](https://doi.org/10.5281/zenodo.18225224)
+[![Release](https://img.shields.io/badge/Release-v0.1.0-blue)](https://github.com/RAD-ET/radet-gee/releases)
+[![Paper DOI](https://img.shields.io/badge/Paper-10.1016%2Fj.rse.2026.115510-orange)](https://doi.org/10.1016/j.rse.2026.115510)
+[![Zenodo DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18225224.svg)](https://doi.org/10.5281/zenodo.18225224)
 
 **WARNING:** This code is in development and may change without notice.
 
-This repository provides a Google Earth Engine (Python API) implementation of the **RADET model (Radiation Advection Diffusivity-independent Evapotranspiration)** for estimating actual evapotranspiration (ET). RADET estimates ET based on the Diffusivity-Independent Flux hypothesis and conditionally incorporates Penman’s aerodynamic term when and where advection is expected to be significant ([Kim et al., 2026](https://doi.org/10.31223/X51B4P)). The RADET-beta implementation here is designed to be consistent with the OpenET Python pipeline to facilitate interoperability and integration within existing workflows.
+This repository provides a Google Earth Engine (Python API) implementation of the **RADET model (Radiation Advection Diffusivity-independent Evapotranspiration)** for estimating actual evapotranspiration (ET). RADET estimates ET based on the Diffusivity-Independent Flux hypothesis and conditionally incorporates Penman’s aerodynamic term when and where advection is expected to be significant ([Kim et al., 2026](https://doi.org/10.1016/j.rse.2026.115510)). The RADET-beta implementation here is designed to be consistent with the OpenET Python pipeline to facilitate interoperability and integration within existing workflows.
+
+**Version note:** RADET v0.1.0 corresponds to the version used in the RSE publication: [Kim et al., 2026](https://doi.org/10.1016/j.rse.2026.115510)
+
+## How to Cite
+
+If you use RADET in your work, please cite the paper:
+
+> Kim, Y., Huntington, J. L., Comini de Andrade, B., Johnson, M. S., Volk, J. M., Majumdar, S., Morton, C., & ReVelle, P. (2026). Thermodynamically constrained surface energy balance using medium-resolution remote sensing for efficient evapotranspiration mapping. *Remote Sensing of Environment*, 344, 115510. https://doi.org/10.1016/j.rse.2026.115510
+
+<details>
+<summary>BibTeX</summary>
+
+```bibtex
+@article{kim2026radet,
+  title   = {Thermodynamically constrained surface energy balance using medium-resolution remote sensing for efficient evapotranspiration mapping},
+  author  = {Kim, Y. and Huntington, J. L. and Comini de Andrade, B. and Johnson, M. S. and Volk, J. M. and Majumdar, S. and Morton, C. and ReVelle, P.},
+  journal = {Remote Sensing of Environment},
+  volume  = {344},
+  pages   = {115510},
+  year    = {2026},
+  doi     = {10.1016/j.rse.2026.115510}
+}
+```
+
+</details>
+
+You can also cite the software release via the [Zenodo DOI](https://doi.org/10.5281/zenodo.18225224).
 
 ## Model Design
 
@@ -144,4 +171,4 @@ See the [Earth Engine Python installation guide](https://developers.google.com/e
 
 ## References
 
-Kim, Y., Huntington, J. L., Comini de Andrade, B., Johnson, M. S., Volk, J. M., Majumdar, S., Morton, C., & ReVelle, P. (2026). Thermodynamically constrained surface energy balance using medium-resolution remote sensing for efficient evapotranspiration mapping. *EarthArXiv (preprint)*. [https://doi.org/10.31223/X51B4P](https://doi.org/10.31223/X51B4P)
+Kim, Y., Huntington, J. L., Comini de Andrade, B., Johnson, M. S., Volk, J. M., Majumdar, S., Morton, C., & ReVelle, P. (2026). Thermodynamically constrained surface energy balance using medium-resolution remote sensing for efficient evapotranspiration mapping. *Remote Sensing of Environment*, 344, 115510. https://doi.org/10.1016/j.rse.2026.115510
