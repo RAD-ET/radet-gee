@@ -325,8 +325,11 @@ def test_Image_elevation_band_name():
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
+        # CGM - Testing against specific annual NLCD image year versions
+        #   will likely fail in the future when a new version is released,
+        #   since the old versions are not kept in the awesome gee catalog
         [
-            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2020_CU_C1V1',
+            'projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2020_CU_C1V2',
             TEST_POINT, 82
         ],
         ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', TEST_POINT, 82],
@@ -529,7 +532,6 @@ def test_Image_from_landsat_c2_sr_default_image():
     """Test that the classmethod is returning a class object"""
     output = model.Image.from_landsat_c2_sr(
         ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_038031_20130828')
-        # 'LANDSAT/LC08/C02/T1_L2/LC08_038031_20130828'
     )
     assert type(output) == type(default_image_obj())
 
@@ -558,7 +560,7 @@ def test_Image_from_landsat_c2_sr_exception():
 
 
 def test_Image_from_landsat_c2_sr_scaling():
-    """Test if Landsat SR images images are being scaled"""
+    """Test if Landsat SR images are being scaled"""
     sr_img = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716')
     input_img = (
         ee.Image.constant([10909, 10909, 10909, 10909, 10909, 10909, 10909, 44177.6, 21824, 0, 9800])
@@ -570,11 +572,11 @@ def test_Image_from_landsat_c2_sr_scaling():
               'system:time_start': ee.Number(sr_img.get('system:time_start'))})
     )
 
-    # LST correction, ocean masking, and cloud score masking
+    # LST correction, emissivity correction, ocean masking, and cloud score masking
     #   do not work with a constant image and must be explicitly set to False
     # Other source inputs must be set to constant values
     output = utils.constant_image_value(model.Image.from_landsat_c2_sr(
-        input_img, c2_lst_correct=False, mask_ocean_flag=False,
+        input_img, c2_lst_correct=False, c2_emissivity_correct=False, mask_ocean_flag=False,
         latitude=36, longitude=-120, landcover_source=81, elevation_source=100,
         temperature_source=300, humidity_source=0.007, windspeed_source=4,
         solar_radiation_source=350,
@@ -583,7 +585,7 @@ def test_Image_from_landsat_c2_sr_scaling():
     assert abs(output['albedo'] - 0.1) <= 0.01
 
     output = utils.constant_image_value(model.Image.from_landsat_c2_sr(
-        input_img, c2_lst_correct=False, mask_ocean_flag=False,
+        input_img, c2_lst_correct=False, c2_emissivity_correct=False, mask_ocean_flag=False,
         latitude=36, longitude=-120, landcover_source=81, elevation_source=100,
         temperature_source=300, humidity_source=0.007, windspeed_source=4,
         solar_radiation_source=350,
@@ -609,6 +611,29 @@ def test_Image_from_landsat_c2_sr_scaling():
 #     assert type(output) == type(default_image_obj())
 
 
+def test_Image_from_landsat_c2_sr_c2_emissivity_correct_arg():
+    """Test if the c2_emissivity_correct parameter can be set (not if it works)"""
+    output = model.Image.from_landsat_c2_sr(
+        'LANDSAT/LC08/C02/T1_L2/LC08_031034_20160702', c2_emissivity_correct=True)
+    assert type(output) == type(default_image_obj())
+
+
+def test_Image_from_landsat_c2_sr_c2_emissivity_correct_fill():
+    """Test if the c2_emissivity_correct fills the LST holes in Nebraska"""
+    image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_031034_20160702'
+    xy = [-102.08284, 37.81728]
+
+    # CGM - Is the uncorrected test needed?
+    uncorrected = utils.point_image_value(
+        model.Image.from_landsat_c2_sr(image_id, c2_emissivity_correct=False).emissivity, xy
+    )
+    assert uncorrected['emissivity'] is None
+    corrected = utils.point_image_value(
+        model.Image.from_landsat_c2_sr(image_id, c2_emissivity_correct=True).emissivity, xy
+    )
+    assert corrected['emissivity'] > 0
+
+
 def test_Image_from_landsat_c2_sr_c2_lst_correct_arg():
     """Test if the c2_lst_correct parameter can be set (not if it works)"""
     output = model.Image.from_landsat_c2_sr(
@@ -630,8 +655,6 @@ def test_Image_from_landsat_c2_sr_c2_lst_correct_fill():
         model.Image.from_landsat_c2_sr(image_id, c2_lst_correct=True).lst, xy
     )
     assert corrected['lst'] > 0
-    # # Exact test values copied from openet-core
-    # assert abs(corrected['lst'] - 306.83) <= 0.25
 
 
 @pytest.mark.parametrize(
@@ -663,7 +686,7 @@ def test_Image_from_image_id(image_id):
     ]
 )
 def test_Image_from_landsat_c2_sr_image_values(image_id, xy, expected, tol=0.0001):
-    """Test instantiating the class using the from_image_id method"""
+    """Test actual image values at a point for regression testing"""
     lai = utils.point_image_value(model.Image.from_landsat_c2_sr(image_id).lai, xy, 30)
     assert abs(lai['lai'] - expected['lai']) < tol
 
@@ -673,13 +696,6 @@ def test_Image_from_landsat_c2_sr_image_values(image_id, xy, expected, tol=0.000
     albedo = utils.point_image_value(model.Image.from_landsat_c2_sr(image_id).albedo, xy, 30)
     assert abs(albedo['albedo'] - expected['albedo']) < tol
 
-    emissivity = utils.point_image_value(model.Image.from_landsat_c2_sr(image_id).emissivity, xy, 30)
+    emissivity = utils.point_image_value(model.Image.from_landsat_c2_sr(
+        image_id, c2_emissivity_correct=False).emissivity, xy, 30)
     assert abs(emissivity['emissivity'] - expected['emissivity']) < tol
-
-    # print(lai, lst, albedo, emissivity)
-
-    # landcover = utils.point_image_value(model.Image.from_landsat_c2_sr(image_id).landcover, xy, 30)
-    # assert abs(landcover['landcover'] - 82) < tol
-    # elevation = utils.point_image_value(model.Image.from_landsat_c2_sr(image_id).elevation, xy, 30)
-    # assert abs(elevation['elevation'] - 10) < tol
-
