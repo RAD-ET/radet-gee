@@ -28,7 +28,7 @@ class Image:
     """Google Earth Engine - RADET for Landsat image"""
 
     _C2_LST_CORRECT = True  # Enable (True) to recalculate LST with emissivity correction
-    _C2_EMISSIVITY_CORRECT = False  # Enable (True) to apply emissivity correction
+    _C2_EMISSIVITY_CORRECT = True  # Enable (True) to apply emissivity correction
 
     def __init__(
         self,
@@ -60,7 +60,7 @@ class Image:
         solar_radiation_source : {"IDAHO_EPSCOR/GRIDMET"}
             Solar radiation source collection ID or keyword.
         landcover_source : {"projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER",
-                            "projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2023_CU_C1V1"}
+                            "projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_2023_CU_C1V2"}
             Land cover source collection or image ID.
             The default is "projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER".
         elevation_source : str, ee.Image
