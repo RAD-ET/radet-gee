@@ -2,8 +2,6 @@ import math
 
 import ee
 
-from radet import utils
-
 pi = math.pi
 SIG = 4.901e-9
 
@@ -30,9 +28,9 @@ def et(
     Parameters
     ----------
     lai : ee.Image
-        Leaf Area Index.
+        Leaf area index.
     lst : ee.Image
-        Land Surface Temperature [K].
+        Land surface temperature [K].
     albedo : ee.Image
         Surface albedo.
     emissivity : ee.Image
@@ -48,13 +46,14 @@ def et(
     qa : ee.Image
         Daily specific humidity.
     u10 : ee.Image
-        Daily average wind speed [m s-1].
+        Daily average wind speed at 10 m height [m s-1].
     srad : ee.Image
         Incoming solar radiation [W m-2].
     meteo_elevation : ee.Image
         Meteorology elevation used for lapsing the air temperature [m].
-    time_start : str
+    time_start : str, int, ee.Number, ee.Date
         Time start of the image.
+        Can be any value or object that can be passed to ee.Date().
     latitude : ee.Image, optional
         Latitude [deg].
     longitude : ee.Image, optional
@@ -68,8 +67,8 @@ def et(
     ----------
     [Kim2026] Kim, Y., Huntington, J., Comini de Andrade, B., Johnson, M.,
         Volk, J., Majumdar, S., Morton, C., & ReVelle, P. (2026).
-        Thermodynamically constrained surface energy balance using
-        medium-resolution remote sensing for efficient evapotranspiration mapping.
+        Thermodynamically constrained surface energy balance using medium
+        resolution remote sensing for efficient evapotranspiration mapping.
         *Remote Sensing of Environment*, 344, 115510.
         https://doi.org/10.1016/j.rse.2026.115510
 
@@ -84,13 +83,14 @@ def et(
     # Meteorological variables
     ##########################
 
+    # TODO: Rename to something all lower case like "pair"
     # Air pressure (kPa)
     PA = ee.Image().expression("101.3 * ((293 - 0.0065 * elev) / 293) ** 5.26", {"elev": elevation})
 
     # Psychrometric constant
     gamma = ee.Image().expression("PA * 0.000665", {"PA": PA})
 
-    # 2m wind speed
+    # Wind speed at 2 m height (m s-1)
     u2 = ee.Image().expression("u10 * 4.87 / log(67.8 * 10 - 5.42)", {"u10": u10})
 
     # Vapor pressure (kPa)
@@ -101,15 +101,17 @@ def et(
     ###################################################
 
     tmaxK_cor = add_lapse_correction(tmax, elevation, meteo_elevation)
-    tmninK_cor = add_lapse_correction(tmin, elevation, meteo_elevation)
+    tminK_cor = add_lapse_correction(tmin, elevation, meteo_elevation)
 
     # Average air temperature (K)
-    t_avg = tmninK_cor.add(tmaxK_cor).multiply(0.5)
+    t_avg = tminK_cor.add(tmaxK_cor).multiply(0.5)
 
     # Saturation vapor pressure (kPa)
     esat = ee.Image().expression("0.6108 * exp(17.27 * (t - 273.15) / ((t - 273.15) + 237.3))", {"t": t_avg})
 
-    # Slope of vapor pressure curve
+    # TODO: Rename "delta" variables in other functions to "declination",
+    #   then rename this variable to lower case "delta"
+    # Slope of the saturation vapor pressure curve
     DELTA = ee.Image().expression(
         "2503 * exp(17.27 * (t - 273.15) / ((t - 273.15) + 237.3)) / ((t - 273.15) + 237.3) ** 2",
         {"t": t_avg}
@@ -139,9 +141,10 @@ def et(
     Rld_MJ = Rld_atm_ASCE(emissivity, fcd, ea, t_avg)
 
     # Daily mean LST 
-    LST_avg = daily_avg_lst(tmninK_cor, lst, sunrise_ts, t_avg)
+    LST_avg = daily_avg_lst(tminK_cor, lst, sunrise_ts, t_avg)
 
     # TODO: Switch to a number calculation instead of an image expression
+    # TODO: Move into isothermal_net_radiation function
     # Soil conductive exchange coefficient
     # gg = 1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)
     gg = ee.Image().expression("1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)", {"pi": pi})
@@ -153,7 +156,7 @@ def et(
     mu_c = ee.Number(1)
     mu_s = ee.Number(1)
 
-    # RHs (mu_s=1 leads to RHs = RHa)
+    # Soil surface relative humidity (mu_s=1 leads to RHs = RHa)
     RHs = ea.divide(esat)
         
     # Soil and canopy LST
@@ -174,7 +177,7 @@ def et(
     ### Second run
     ###########################
 
-    # RHs 
+    # Soil surface relative humidity
     RHs = RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water)
     
     # Soil and canopy LST
@@ -195,29 +198,59 @@ def et(
     # ET model (mm/day)
     ###########################
 
+    # TODO: Change order of inputs to Rnc, DELTA, gamma to make clear calculation
+    #   is working off Rnc for setting the output image projection
     # ET_DIF (mm/day)
     ET_DIF = DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s)
 
+    # TODO: Rename to something more distinct from vapor pressure "ea" variable
     # Penman aerodynamic term
     Ea = aerodynamic_term(del_LC, fc, LST_soil, RHs, gamma, DELTA, u2, esat, ea)
 
     return ET_DIF.add(Ea).rename("ET")
 
 
-# TODO: Remove from dedicated function or split into separate functions
 def transmissivities(lai):
-    """"""
-    tauL = lai.expression("exp(-0.95 * lai)", {"lai": lai}).rename("tauL").clamp(0.01, 1)
-    tauS = lai.expression("exp(-0.56 * lai)", {"lai": lai}).rename("tauS").clamp(0.01, 1)
-    fc = lai.expression("1-exp(-0.4 * lai)", {"lai": lai}).rename("fc").clamp(0.01, 1)
+    """Daily longwave transmissivity, shortwave transmissivity, and canopy fraction
+
+    Parameters
+    ----------
+    lai : ee.Image
+        Leaf area index.
+
+    Returns
+    -------
+    tauL : ee.Image
+    tauS : ee.Image
+    fc : ee.Image
+
+    """
+    tauL = lai.expression("exp(-0.95 * lai)", {"lai": lai}).clamp(0.01, 1).rename("tauL")
+    tauS = lai.expression("exp(-0.56 * lai)", {"lai": lai}).clamp(0.01, 1).rename("tauS")
+    fc = lai.expression("1 - exp(-0.4 * lai)", {"lai": lai}).clamp(0.01, 1).rename("fc")
     
     return tauL, tauS, fc
 
 
 # TODO: Add support for passing in remap lists, or remap the values in image.py
 # TODO: Split into two separate functions
+# TODO: Add a better explanation of what the "wet" variable represents
 def wet_mask(landcover, lai):
-    """"""
+    """
+
+    Parameters
+    ----------
+    landcover : ee.Image
+        Landcover image with NLCD classes.
+    lai : ee.Image
+        Leaf area index.
+
+    Returns
+    -------
+    wet : ee.Image
+    water : ee.Image
+
+    """
     water = landcover.remap([11], [1], 0).eq(1)
 
     # Define wet surfaces
@@ -230,7 +263,28 @@ def wet_mask(landcover, lai):
 
 
 def clear_sky_terms(time_start, lat, elev, srad):
-    """"""
+    """
+
+    Parameters
+    ----------
+    time_start : str, int, ee.Number, ee.Date
+        Time start of the image.
+        Can be any value or object that can be passed to ee.Date().
+    lat : ee.Image
+        Latitude [deg].
+    elev : ee.Image
+        Elevation [m].
+    srad : ee.Image
+        Incoming solar radiation [W m-2 d-1].
+
+    Returns
+    -------
+    Rs_MJ : ee.Image
+    Ra_MJ : ee.Image
+    fcd : ee.Image
+    sunrise_ts : ee.Image
+
+    """
     J = ee.Number(ee.Date(time_start).getRelative("day", "year")).add(1)
     phi = lat.multiply(pi / 180)
 
@@ -238,25 +292,40 @@ def clear_sky_terms(time_start, lat, elev, srad):
     delta = ee.Image().expression("0.409 * sin(2 * PI / 365 * J - 1.39)", {"PI": pi, "J": J})
     cosW = ee.Image().expression("-tan(phi) * tan(delta)", {"phi": phi, "delta": delta})
     omega = cosW.clamp(-1, 1).acos()
+    sunrise_ts = omega.multiply(24 / pi).divide(2).multiply(-1).add(12)
 
-    Ra_MJ = ee.Image().expression(
+    Ra_MJ = phi.expression(
         "(24 / PI) * 4.92 * dr * (omega * sin(phi) * sin(delta) + cos(phi) * cos(delta) * sin(omega))",
         {"PI": pi, "dr": dr, "omega": omega, "phi": phi, "delta": delta},
     )
-
-    Rso_MJ = ee.Image().expression("(0.75 + 2e-5 * elev) * Ra", {"elev": elev, "Ra": Ra_MJ})
+    Rso_MJ = elev.multiply(2e-5).add(0.75).multiply(Ra_MJ)
 
     Rs_MJ = srad.multiply(86400).divide(1e6)
     ratio = Rs_MJ.divide(Rso_MJ.where(Rso_MJ.eq(0), 1)).clamp(0.3, 1)
-    fcd = ee.Image(1.35).multiply(ratio).subtract(0.35)
-    day_length = ee.Image().expression("24 / PI * omega", {"PI": pi, "omega": omega})
-    sunrise_ts = ee.Image().expression("12 - day_length / 2", {"day_length": day_length})
+    fcd = ratio.multiply(1.35).subtract(0.35)
 
-    return Rs_MJ, Ra_MJ, fcd, sunrise_ts
+    return Rs_MJ.rename('Rs_MJ'), Ra_MJ.rename('Ra_MJ'), fcd.rename('fcd'), sunrise_ts.rename('sunrise_ts')
 
 
 def daily_avg_lst(tminK, lst, sunrise_ts, t_avg):
-    """"""
+    """Daily mean land surface temperature
+
+    Parameters
+    ----------
+    tminK : ee.Image
+        Daily minimum air temperature [K].
+    lst : ee.Image
+        Land Surface Temperature [K].
+    sunrise_ts : ee.Image
+        Local sunrise time.
+    t_avg : ee.Image
+        Average air temperature [K].
+
+    Returns
+    -------
+    ee.Image
+
+    """
     LST_min = tminK.subtract(1)
     LST_max = lst.expression(
         "LST_min + (LST - LST_min) / (cos((10 - 12.5) / (12.5 - sunrise_ts) / 2 * PI))",
@@ -266,8 +335,46 @@ def daily_avg_lst(tminK, lst, sunrise_ts, t_avg):
 
 
 # TODO: Split into two separate functions
-def canopy_and_soil_LST(LST_avg, t_avg, Rs_MJ,Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo):
-    """"""
+def canopy_and_soil_LST(LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo):
+    """
+
+    Parameters
+    ----------
+    LST_avg : ee.Image
+        Daily mean land surface temperature [K].
+    t_avg : ee.Image
+        Average air temperature [K].
+    Rs_MJ : ee.Image
+        Downward short wave radiation [MJ m-2 d-1].
+    Rld_MJ : ee.Image
+        Downward long wave radiation [MJ m-2 d-1].
+    fc : ee.Image
+        Fraction of net radiation absorbed by the canopy.
+    tauS : ee.Image
+        Daily shortwave transmissivity.
+    tauL : ee.Image
+        Daily longwave transmissivity.
+    mu_c : ee.Image
+
+    mu_s : ee.Image
+
+    RHs : ee.Image
+        Soil surface relative humidity.
+    DELTA : ee.Image
+        Slope of vapor pressure curve.
+    gamma : ee.Image
+        Psychrometric constant.
+    emissivity : ee.Image
+        Broad-band surface emissivity.
+    albedo : ee.Image
+        Surface albedo.
+
+    Returns
+    -------
+    LST_canopy : ee.Image
+    LST_soil : ee.Image
+
+    """
     # Canopy LST
     beta = ee.Image().expression(
         "fc / (fc + mu_s / mu_c * (1 - fc) * (DELTA + gamma * mu_c) / (DELTA * RHs + gamma * mu_s))",
@@ -275,7 +382,7 @@ def canopy_and_soil_LST(LST_avg, t_avg, Rs_MJ,Rld_MJ, fc, tauS, tauL, mu_c, mu_s
     
     LST_canopy = ee.Image().expression(
         "t_avg + beta * (LST_avg - t_avg)", {"t_avg": t_avg, "LST_avg": LST_avg, "beta": beta}
-    )
+    ).rename('LST_canopy')
     
     # Maximum soil LST
     LST_soil_max = ee.Image().expression(
@@ -292,43 +399,90 @@ def canopy_and_soil_LST(LST_avg, t_avg, Rs_MJ,Rld_MJ, fc, tauS, tauL, mu_c, mu_s
         "((LST_avg ** 4 - (1 - tauL) * (LST_canopy) ** 4) / tauL) ** (1 / 4)",
         {"LST_canopy": LST_canopy, "LST_avg": LST_avg, "tauL": tauL}
     )
-    LST_soil = LST_soil.min(LST_soil_max)    
+    LST_soil = LST_soil.min(LST_soil_max).rename('LST_soil')
     
     return LST_canopy, LST_soil
 
 
 def RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water):
-    """"""
+    """Soil surface relative humidity
+
+    Parameters
+    ----------
+    ea : ee.Image
+        Vapor pressure [kPa].
+    esat : ee.Image
+        Saturated vapor pressure [kPa].
+    DELTA : ee.Image
+        Slope of vapor pressure curve
+    LST_soil : ee.Image
+        Soil land surface temperature [K].
+    t_avg : ee.Image
+        Average air temperature [K].
+    mu_s : ee.Image
+
+    water : ee.Image
+        Water mask with water pixels assigned a value of 1.
+
+    Returns
+    -------
+    ee.Image
+
+    """
     RHs = ee.Image().expression(
         "ea / (esat + DELTA * (LST_soil - ta) * (mu_s-1) / mu_s)",
-        {"ea":ea, "esat":esat, "mu_s":mu_s, "DELTA":DELTA, "LST_soil":LST_soil, "ta": t_avg}
+        {"ea": ea, "esat": esat, "mu_s": mu_s, "DELTA": DELTA, "LST_soil": LST_soil, "ta": t_avg}
     )
     
     return RHs.where(water, 1).rename("RHs")
 
 
-# TODO: Split into separate functions and/or move to being in the main model function
 def net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS, tauL):
-    """"""
+    """
+
+    Parameters
+    ----------
+    emissivity : ee.Image
+        Broad-band surface emissivity.
+    LST_canopy : ee.Image
+        Canopy land surface temperature [K].
+    LST_soil : ee.Image
+        Soil land surface temperature [K].
+    Rs_MJ : ee.Image
+        Downward short wave radiation [MJ m-2 d-1].
+    Rld_MJ : ee.Image
+        Downward long wave radiation [MJ m-2 d-1].
+    albedo : ee.Image
+        Surface albedo.
+    tauS : ee.Image
+        Daily shortwave transmissivity.
+    tauL : ee.Image
+        Daily longwave transmissivity.
+
+    Returns
+    -------
+    ee.Image
+
+    """
     # Net radiation at soil
     Rns  = ee.Image().expression(
-        "tauS * (1 - albedo) * Rs_MJ + tauL * Rld"
+        "tauS * (1 - albedo) * Rs + tauL * Rld"
         " + (1 - tauL) * emis * SIG * LST_canopy ** 4 - emis * SIG * LST_soil ** 4",
         {
-            "tauS": tauS, "tauL": tauL, "Rs_MJ": Rs_MJ, "albedo": albedo, "Rld": Rld_MJ,
+            "tauS": tauS, "tauL": tauL, "Rs": Rs_MJ, "albedo": albedo, "Rld": Rld_MJ,
             "emis": emissivity, "SIG": SIG, "LST_canopy": LST_canopy, "LST_soil": LST_soil
         }
-    ).rename("Rns").max(0)
+    ).max(0).rename("Rns")
 
     # Net radiation at canopy
     Rnc  = ee.Image().expression(
-        "(1 - tauS) * (1 - albedo) * Rs_MJ"
+        "(1 - tauS) * (1 - albedo) * Rs"
         " + (1 - tauL) * (Rld + emis * SIG * LST_soil ** 4 - 2 * emis * SIG * LST_canopy ** 4)",
         {
-            "tauS": tauS, "tauL": tauL, "Rs_MJ": Rs_MJ, "albedo": albedo, "Rld": Rld_MJ,
+            "tauS": tauS, "tauL": tauL, "Rs": Rs_MJ, "albedo": albedo, "Rld": Rld_MJ,
             "emis": emissivity, "SIG": SIG, "LST_canopy": LST_canopy, "LST_soil": LST_soil
         }
-    ).rename("Rnc").max(0)
+    ).max(0).rename("Rnc")
 
     # Soil heat flux
     G = ee.Image().expression("0.35 * Rns - 1.5", {"Rns": Rns}).rename("G")
@@ -338,7 +492,31 @@ def net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS,
 
 # TODO: Split into two separate functions
 def isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, gg, LST_canopy, LST_soil):
-    """Isothermal canopy net radiation and isothermal soil available energy"""
+    """Isothermal canopy net radiation and isothermal soil available energy
+
+    Parameters
+    ----------
+    Rnc : ee.Image
+        Net radiation at the canopy [MJ m-2 d-1].
+    AEs : ee.Image
+        Available energy at the soil surface [MJ m-2 d-1].
+    tauL : ee.Image
+        Daily longwave transmissivity.
+    emissivity : ee.Image
+        Broad-band surface emissivity.
+    t_avg : ee.Image
+        Average air temperature [K].
+    gg : ee.Image
+    LST_canopy : ee.Image
+        Canopy land surface temperature [K].
+    LST_soil : ee.Image
+        Soil land surface temperature [K].
+
+    Returns
+    -------
+    ee.Image
+
+    """
     Rnci  = ee.Image().expression(
         "Rnc + 4 * 2 * (1 - tauL) * emis * SIG * ta ** 3 * (LST - ta)",
         {"Rnc": Rnc, "tauL": tauL, "emis": emissivity, "SIG": SIG, "ta": t_avg, "LST": LST_canopy}
@@ -354,7 +532,31 @@ def isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, gg, LST_canopy, 
 
 # TODO: Split into two separate functions
 def mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs):
-    """"""
+    """
+
+    Parameters
+    ----------
+    Rnc : ee.Image
+        Net radiation at the canopy [MJ m-2 d-1].
+    Rnci : ee.Image
+        Isothermal net radiation at the canopy [MJ m-2 d-1].
+    DELTA : ee.Image
+        Slope of vapor pressure curve.
+    gamma : ee.Image
+        Psychrometric constant.
+    AEs : ee.Image
+        Available energy at the soil surface [MJ m-2 d-1].
+    AEsi : ee.Image
+        Isothermal available energy at the soil surface [MJ m-2 d-1].
+    RHs : ee.Image
+        Soil surface relative humidity.
+
+    Returns
+    -------
+    mu_c : ee.Image
+    mu_s : ee.Image
+
+    """
 
     Rnc_safe = Rnc.max(0.001)
     AEs_safe = AEs.max(0.001)
@@ -375,7 +577,30 @@ def mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs):
 
 
 def DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s):
-    """"""
+    """
+
+    Parameters
+    ----------
+    gamma : ee.Image
+        Psychrometric constant.
+    DELTA : ee.Image
+        Slope of vapor pressure curve.
+    Rnc : ee.Image
+        Net radiation at the canopy [MJ m-2 d-1].
+    AEs : ee.Image
+        Available energy at the soil surface [MJ m-2 d-1].
+    RHs : ee.Image
+        Soil surface relative humidity.
+    mu_c : ee.Image
+
+    mu_s : ee.Image
+
+
+    Returns
+    -------
+    ee.Image
+
+    """
     return (
         Rnc.expression(
             "(Rnc * DELTA / (DELTA + gamma * mu_c) + RHs * DELTA / (RHs * DELTA + gamma * mu_s) * AEs) / 2.45",
@@ -386,14 +611,41 @@ def DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s):
 
 
 def aerodynamic_term(del_LC, fc, LST_soil, RHs, gamma, DELTA, u2, esat, ea):
-    """"""
+    """
+
+    Parameters
+    ----------
+    del_LC : ee.Image
+
+    fc : ee.Image
+        Fraction of net radiation absorbed by the canopy.
+    LST_soil : ee.Image
+        Soil land surface temperature [K].
+    RHs : ee.Image
+        Soil surface relative humidity.
+    gamma : ee.Image
+        Psychrometric constant.
+    DELTA : ee.Image
+        Slope of vapor pressure curve.
+    u2 : ee.Image
+        Wind speed at 2 m height [m s-1].
+    esat : ee.Image
+        Saturation vapor pressure [kPa].
+    ea : ee.Image
+        Vapor pressure [kPa].
+
+    Returns
+    -------
+    ee.Image
+
+    """
     esat_LST_soil = ee.Image().expression(
         "0.6108 * exp(17.27 * (t - 273.15) / ((t - 273.15) + 237.3))", {"t": LST_soil}
     )
 
     del_water = ee.Image().expression(
         "fc + (1 - fc) * (RHs ** (esat_soil - esat_soil * RHs)) / (1 + exp(10 - LST_soil + 273.15))",
-        {"fc":fc, "RHs":RHs, "esat_soil":esat_LST_soil, "LST_soil":LST_soil}
+        {"fc": fc, "RHs": RHs, "esat_soil": esat_LST_soil, "LST_soil": LST_soil}
     )
     
     return ee.Image().expression(
@@ -406,7 +658,24 @@ def aerodynamic_term(del_LC, fc, LST_soil, RHs, gamma, DELTA, u2, esat, ea):
 
 
 def Rld_atm_ASCE(emissivity, fcd, ea, t_avg):
-    """"""
+    """Downward long wave radiation from atmosphere
+
+    Parameters
+    ----------
+    emissivity : ee.Image
+        Broad-band surface emissivity.
+    fcd : ee.Image
+        Cloudiness fraction.
+    ea : ee.Image
+        Vapor pressure [kPa].
+    t_avg : ee.Image
+        Average air temperature [K].
+
+    Returns
+    -------
+    ee.Image
+
+    """
     return ee.Image().expression(
         "emissivity * SIG * (1 - fcd * (0.34 - 0.14 * ea ** 0.5)) * t_avg ** 4",
         {"emissivity": emissivity, "SIG": SIG, "fcd": fcd, "ea": ea, "t_avg": t_avg}
@@ -414,7 +683,22 @@ def Rld_atm_ASCE(emissivity, fcd, ea, t_avg):
 
 
 def add_lapse_correction(ta, elev, elev_coarse):
-    """"""
+    """
+
+    Parameters
+    ----------
+    ta : ee.Image
+        Air temperature [K].
+    elev : ee.Image
+        Elevation [m].
+    elev_coarse : ee.Image
+        Meteorology coarse resolution elevation [m].
+
+    Returns
+    -------
+    ee.Image
+
+    """
     lapse_corr = elev.subtract(elev_coarse).multiply(-0.0065)
 
     return ta.add(lapse_corr).rename("t_corrected")
@@ -430,18 +714,20 @@ def terrain_shade_correct_srad(Rs_MJ, Ra_MJ, elev, time_start, albedo, latitude,
     Parameters
     ----------
     Rs_MJ : ee.Image
-        incoming solar radiation (MJ m-2 d-1)
+        Incoming solar radiation [MJ m-2 d-1].
     Ra_MJ : ee.Image
-        extraterrestrial radiation (MJ m-2 d-1)
+        Extraterrestrial radiation [MJ m-2 d-1].
     elev : ee.Image
-        elevation DEM (m)
-    time_start : int, ee.Number
+        Elevation [m].
+    time_start : str, int, ee.Number, ee.Date
+        Time start of the image.
+        Can be any value or object that can be passed to ee.Date().
     albedo : float
-        surface albedo used in Eq.38 term
+        Surface albedo used in Eq.38 term
     latitude : ee.Image
-        latitude [deg].
+        Latitude [deg].
     longitude : ee.Image
-        longitude [deg].
+        Longitude [deg].
 
     Returns
     -------
