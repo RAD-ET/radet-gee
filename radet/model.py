@@ -66,22 +66,23 @@ def et(
 
     Reference
     ----------
-    TODO: Update reference
-    [Kim2026] Yeonuk Kim, Justin L Huntington, Bruno Comini de Andrade,
-        John M Volk, Sayantan Majumdar, Charles Morton, ...
+    [Kim2026] Kim, Y., Huntington, J., Comini de Andrade, B., Johnson, M.,
+        Volk, J., Majumdar, S., Morton, C., & ReVelle, P. (2026).
+        Thermodynamically constrained surface energy balance using
+        medium-resolution remote sensing for efficient evapotranspiration mapping.
+        *Remote Sensing of Environment*, 344, 115510.
+        https://doi.org/10.1016/j.rse.2026.115510
 
     """
-
-    # TODO: check if time_start local time affects calculations. (BC: Don't think so)
 
     if latitude is None:
         latitude = ee.Image.pixelLonLat().select(["latitude"])
     if longitude is None:
         longitude = ee.Image.pixelLonLat().select(["longitude"])
 
-    #################################
+    ##########################
     # Meteorological variables
-    #################################
+    ##########################
 
     # Air pressure (kPa)
     PA = ee.Image().expression("101.3 * ((293 - 0.0065 * elev) / 293) ** 5.26", {"elev": elevation})
@@ -96,8 +97,9 @@ def et(
     ea = ee.Image().expression("qa * PA / ((1 - 0.622) * qa + 0.622)", {"PA": PA, "qa": qa})
 
     ###################################################
-    # temperature variables after lapse rate correction
-    ##################################################
+    # Temperature variables after lapse rate correction
+    ###################################################
+
     tmaxK_cor = add_lapse_correction(tmax, elevation, meteo_elevation)
     tmninK_cor = add_lapse_correction(tmin, elevation, meteo_elevation)
 
@@ -116,15 +118,17 @@ def et(
     ############################################
     # Clear Sky terms and slope shade correction
     ############################################
+
     # Clear-Sky terms
     Rs_MJ, Ra_MJ, fcd, sunrise_ts = clear_sky_terms(time_start, latitude, elevation, srad)
 
-    # surface shortwave correction based on shade effect (Allen et al., 2006)
+    # Surface shortwave correction based on shade effect (Allen et al., 2006)
     Rs_MJ_cor = terrain_shade_correct_srad(Rs_MJ, Ra_MJ, elevation, time_start, albedo, latitude, longitude)
     
-    ############################################
+    #########################################
     # Other variables independent to mu terms
-    ############################################
+    #########################################
+
     # Land cover mask
     del_LC, water = wet_mask(landcover, lai)
 
@@ -142,9 +146,10 @@ def et(
     # gg = 1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)
     gg = ee.Image().expression("1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)", {"pi": pi})
 
-    ##########################################
-    ### initial guess: mu_s = 1, mu_c = 1
-    ##########################################    
+    ###################################
+    # Initial guess: mu_s = 1, mu_c = 1
+    ###################################
+
     mu_c = ee.Number(1)
     mu_s = ee.Number(1)
 
@@ -165,14 +170,15 @@ def et(
     # mu terms
     mu_c, mu_s = mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs)
 
-    ##########################################
+    ###########################
     ### Second run
-    ##########################################    
+    ###########################
+
     # RHs 
     RHs = RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water)
     
-    # soil and canopy LST
-    LST_canopy, LST_soil= canopy_and_soil_LST(
+    # Soil and canopy LST
+    LST_canopy, LST_soil = canopy_and_soil_LST(
         LST_avg, t_avg, Rs_MJ_cor, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo
     )
 
@@ -185,9 +191,9 @@ def et(
     # mu terms
     mu_c, mu_s = mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs)
 
-    ##########################################
+    ###########################
     # ET model (mm/day)
-    ##########################################
+    ###########################
 
     # ET_DIF (mm/day)
     ET_DIF = DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s)
@@ -195,12 +201,7 @@ def et(
     # Penman aerodynamic term
     Ea = aerodynamic_term(del_LC, fc, LST_soil, RHs, gamma, DELTA, u2, esat, ea)
 
-    return ee.Image(ET_DIF.add(Ea).rename("ET"))
-
-    # # CGM - If you adjust the order of operations in DIF_model() you can keep
-    # #   a reference to the original image projection and don't need to reset it here
-    # # This approach seems to be working and this block will be removed in the future
-    # return ee.Image(ET_DIF.add(Ea).rename("ET")).setDefaultProjection(proj)
+    return ET_DIF.add(Ea).rename("ET")
 
 
 # TODO: Remove from dedicated function or split into separate functions
@@ -322,7 +323,7 @@ def net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS,
     # Net radiation at canopy
     Rnc  = ee.Image().expression(
         "(1 - tauS) * (1 - albedo) * Rs_MJ"
-        "+ (1 - tauL) * (Rld + emis * SIG * LST_soil ** 4 - 2 * emis * SIG * LST_canopy ** 4)",
+        " + (1 - tauL) * (Rld + emis * SIG * LST_soil ** 4 - 2 * emis * SIG * LST_canopy ** 4)",
         {
             "tauS": tauS, "tauL": tauL, "Rs_MJ": Rs_MJ, "albedo": albedo, "Rld": Rld_MJ,
             "emis": emissivity, "SIG": SIG, "LST_canopy": LST_canopy, "LST_soil": LST_soil
@@ -375,23 +376,13 @@ def mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs):
 
 def DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s):
     """"""
-    # CGM - Changing the order of operations so that Rnc is the first image used
-    #   will allow the output image to have the original Landsat image projection
-    #   and remove the need for setting the default projection
     return (
         Rnc.expression(
             "(Rnc * DELTA / (DELTA + gamma * mu_c) + RHs * DELTA / (RHs * DELTA + gamma * mu_s) * AEs) / 2.45",
-            {"gamma": gamma, "DELTA": DELTA, "Rnc": Rnc, "AEs": AEs, "RHs": RHs, "mu_c": mu_c, "mu_s": mu_s},
+            {"Rnc": Rnc, "DELTA": DELTA, "gamma": gamma, "AEs": AEs, "RHs": RHs, "mu_c": mu_c, "mu_s": mu_s},
         )
         .max(0).rename("ET_DIF")
     )
-    # return (
-    #     ee.Image().expression(
-    #         "(DELTA / (DELTA + gamma * mu_c) + RHs * DELTA / (RHs * DELTA + gamma * mu_s) * AEs) / 2.45",
-    #         {"gamma": gamma, "DELTA": DELTA, "Rnc": Rnc, "AEs": AEs, "RHs": RHs, "mu_c": mu_c, "mu_s": mu_s},
-    #     )
-    #     .max(0).rename("ET_DIF")
-    # )
 
 
 def aerodynamic_term(del_LC, fc, LST_soil, RHs, gamma, DELTA, u2, esat, ea):

@@ -9,7 +9,7 @@
 
 **WARNING:** This code is in development and may change without notice.
 
-This repository provides a Google Earth Engine (Python API) implementation of the **RADET model (Radiation Advection Diffusivity-independent Evapotranspiration)** for estimating actual evapotranspiration (ET). RADET estimates ET based on the Diffusivity-Independent Flux hypothesis and conditionally incorporates Penman’s aerodynamic term when and where advection is expected to be significant ([Kim et al., 2026](https://doi.org/10.1016/j.rse.2026.115510)). The RADET-beta implementation here is designed to be consistent with the OpenET Python pipeline to facilitate interoperability and integration within existing workflows.
+This repository provides a Google Earth Engine (Python API) implementation of the **RADET model (Radiation Advection Diffusivity-independent Evapotranspiration)** for estimating actual evapotranspiration (ET). RADET estimates ET based on the Diffusivity-Independent Flux hypothesis and conditionally incorporates Penman’s aerodynamic term when and where advection is expected to be significant ([Kim et al., 2026](https://doi.org/10.1016/j.rse.2026.115510)). The RADET-GEE implementation here is designed to be consistent with the OpenET Python pipeline to facilitate interoperability and integration within existing workflows.
 
 **Version note:** RADET v0.1.0 corresponds to the version used in the RSE publication: [Kim et al., 2026](https://doi.org/10.1016/j.rse.2026.115510)
 
@@ -84,7 +84,7 @@ The `examples/` folder contains the following:
 ## Project Structure
 
 ```
-radet-beta/
+radet-gee/
 ├── radet/
 │   ├── __init__.py
 │   ├── collection.py      # ET image collection builder
@@ -132,10 +132,10 @@ conda create -y -n radet python=3.12
 conda activate radet
 ```
 
-Navigate to the `radet-beta` directory and install the package:
+Navigate to the `radet-gee` directory and install the package:
 
 ```bash
-cd /path/to/radet-beta
+cd /path/to/radet-gee
 ```
 
 **Option A** — Install the core RADET model only:
