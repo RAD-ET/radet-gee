@@ -683,6 +683,29 @@ def test_Image_from_image_id(image_id):
             {'lai': 0.1052, 'lst': 326.5032, 'albedo': 0.1773, 'emissivity': 0.9752}
         ],
         # [ 'LANDSAT/LC09/C02/T1_L2/LC09_044033_20220127', ]
+        #
+        # Additional test points for model.py tests
+        [
+            'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716', [-121.667, 38.898],
+            {'lai': 3.2891, 'lst': 309.9173, 'albedo': 0.1857, 'emissivity': 0.9712}
+        ],
+        [
+            'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716', [-121.667, 38.9267],
+            {'lai': 2.0155, 'lst': 312.9529, 'albedo': 0.1869, 'emissivity': 0.9657}
+        ],
+        [
+            'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716', [-121.677, 38.905],
+            {'lai': 0.7336, 'lst': 319.1873, 'albedo': 0.1200, 'emissivity': 0.9693}
+        ],
+        [
+            'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716', [-121.677, 38.898],
+            {'lai': 0.4665, 'lst': 323.1233, 'albedo': 0.1609, 'emissivity': 0.9700}
+        ],
+        [
+            'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716', [-121.650, 38.913],
+            {'lai': 0.1052, 'lst': 326.5032, 'albedo': 0.1773, 'emissivity': 0.9752}
+        ],
+
     ]
 )
 def test_Image_from_landsat_c2_sr_image_values(image_id, xy, expected, tol=0.0001):

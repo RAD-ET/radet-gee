@@ -35,7 +35,7 @@ def et(
         Surface albedo.
     emissivity : ee.Image
         Broad-band surface emissivity.
-    landcover : str
+    landcover : ee.Image
         Landcover image with NLCD classes.
     elevation : ee.Image
         Elevation [m].
@@ -83,7 +83,7 @@ def et(
     # Meteorological variables
     ##########################
 
-    # TODO: Rename to something all lower case like "pair"
+    # TODO: Rename to something all lower case like "p_air"
     # Air pressure (kPa)
     PA = ee.Image().expression("101.3 * ((293 - 0.0065 * elev) / 293) ** 5.26", {"elev": elevation})
 
@@ -143,12 +143,6 @@ def et(
     # Daily mean LST 
     LST_avg = daily_avg_lst(tminK_cor, lst, sunrise_ts, t_avg)
 
-    # TODO: Switch to a number calculation instead of an image expression
-    # TODO: Move into isothermal_net_radiation function
-    # Soil conductive exchange coefficient
-    # gg = 1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)
-    gg = ee.Image().expression("1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)", {"pi": pi})
-
     ###################################
     # Initial guess: mu_s = 1, mu_c = 1
     ###################################
@@ -158,7 +152,7 @@ def et(
 
     # Soil surface relative humidity (mu_s=1 leads to RHs = RHa)
     RHs = ea.divide(esat)
-        
+
     # Soil and canopy LST
     LST_canopy, LST_soil = canopy_and_soil_LST(
         LST_avg, t_avg, Rs_MJ_cor, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo
@@ -168,7 +162,7 @@ def et(
     Rn, Rnc, Rns, G, AEs = net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ_cor, Rld_MJ, albedo, tauS, tauL)
 
     # Isothermal canopy net radiation and isothermal soil available energy
-    Rnci, AEsi = isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, gg, LST_canopy, LST_soil)
+    Rnci, AEsi = isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil)
 
     # mu terms
     mu_c, mu_s = mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs)
@@ -189,7 +183,7 @@ def et(
     Rn, Rnc, Rns, G, AEs = net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ_cor, Rld_MJ, albedo, tauS, tauL)
 
     # Isothermal canopy net radiation and isothermal soil available energy
-    Rnci, AEsi = isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, gg, LST_canopy, LST_soil)
+    Rnci, AEsi = isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil)
 
     # mu terms
     mu_c, mu_s = mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs)
@@ -430,7 +424,7 @@ def RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water):
 
     """
     RHs = ee.Image().expression(
-        "ea / (esat + DELTA * (LST_soil - ta) * (mu_s-1) / mu_s)",
+        "ea / (esat + DELTA * (LST_soil - ta) * (mu_s - 1) / mu_s)",
         {"ea": ea, "esat": esat, "mu_s": mu_s, "DELTA": DELTA, "LST_soil": LST_soil, "ta": t_avg}
     )
     
@@ -487,11 +481,11 @@ def net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS,
     # Soil heat flux
     G = ee.Image().expression("0.35 * Rns - 1.5", {"Rns": Rns}).rename("G")
     
-    return Rnc.add(Rns), Rnc, Rns, G, Rns.subtract(G)
+    return Rnc.add(Rns).rename('Rn'), Rnc, Rns, G, Rns.subtract(G).rename('AEs')
 
 
 # TODO: Split into two separate functions
-def isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, gg, LST_canopy, LST_soil):
+def isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil):
     """Isothermal canopy net radiation and isothermal soil available energy
 
     Parameters
@@ -506,7 +500,6 @@ def isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, gg, LST_canopy, 
         Broad-band surface emissivity.
     t_avg : ee.Image
         Average air temperature [K].
-    gg : ee.Image
     LST_canopy : ee.Image
         Canopy land surface temperature [K].
     LST_soil : ee.Image
@@ -521,6 +514,11 @@ def isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, gg, LST_canopy, 
         "Rnc + 4 * 2 * (1 - tauL) * emis * SIG * ta ** 3 * (LST - ta)",
         {"Rnc": Rnc, "tauL": tauL, "emis": emissivity, "SIG": SIG, "ta": t_avg, "LST": LST_canopy}
     ).rename("Rnci")
+
+    # TODO: Switch to a number calculation instead of an image expression
+    # Soil conductive exchange coefficient
+    # gg = 1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)
+    gg = ee.Image().expression("1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)", {"pi": pi})
 
     AEsi  = ee.Image().expression(
         "AEs + (4 * emis * SIG * ta ** 3 + gg) * (LST - ta)",
