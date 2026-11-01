@@ -83,18 +83,17 @@ def et(
     # Meteorological variables
     ##########################
 
-    # TODO: Rename to something all lower case like "p_air"
     # Air pressure (kPa)
-    PA = ee.Image().expression("101.3 * ((293 - 0.0065 * elev) / 293) ** 5.26", {"elev": elevation})
+    p_air = ee.Image().expression("101.3 * ((293 - 0.0065 * elev) / 293) ** 5.26", {"elev": elevation})
 
     # Psychrometric constant
-    gamma = ee.Image().expression("PA * 0.000665", {"PA": PA})
+    gamma = ee.Image().expression("p_air * 0.000665", {"p_air": p_air})
 
     # Wind speed at 2 m height (m s-1)
     u2 = ee.Image().expression("u10 * 4.87 / log(67.8 * 10 - 5.42)", {"u10": u10})
 
     # Vapor pressure (kPa)
-    ea = ee.Image().expression("qa * PA / ((1 - 0.622) * qa + 0.622)", {"PA": PA, "qa": qa})
+    ea = ee.Image().expression("qa * p_air / ((1 - 0.622) * qa + 0.622)", {"p_air": p_air, "qa": qa})
 
     ###################################################
     # Temperature variables after lapse rate correction
@@ -112,7 +111,7 @@ def et(
     # TODO: Rename "delta" variables in other functions to "declination",
     #   then rename this variable to lower case "delta"
     # Slope of the saturation vapor pressure curve
-    DELTA = ee.Image().expression(
+    delta = ee.Image().expression(
         "2503 * exp(17.27 * (t - 273.15) / ((t - 273.15) + 237.3)) / ((t - 273.15) + 237.3) ** 2",
         {"t": t_avg}
     )
@@ -154,11 +153,8 @@ def et(
     RHs = ea.divide(esat)
 
     # Soil and canopy LST
-    LST_canopy = canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma)
+    LST_canopy = canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, delta, gamma)
     LST_soil = soil_LST(LST_avg, LST_canopy, Rs_MJ_cor, Rld_MJ, tauS, tauL, emissivity, albedo)
-    # LST_canopy, LST_soil = canopy_and_soil_LST(
-    #     LST_avg, t_avg, Rs_MJ_cor, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo
-    # )
 
     # Daily mean net radiation (total, soil and canopy, soil heat flux) (MJ m-2 d-1)
     Rn, Rnc, Rns, G, AEs = net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ_cor, Rld_MJ, albedo, tauS, tauL)
@@ -168,22 +164,19 @@ def et(
     AEsi = isothermal_soil_available_energy(AEs, emissivity, t_avg, LST_soil)
 
     # mu terms
-    mu_c = mu_canopy(Rnc, Rnci, DELTA, gamma)
-    mu_s = mu_soil(AEs, AEsi, RHs, DELTA, gamma, )
+    mu_c = mu_canopy(Rnc, Rnci, delta, gamma)
+    mu_s = mu_soil(AEs, AEsi, RHs, delta, gamma, )
 
     ###########################
     ### Second run
     ###########################
 
     # Soil surface relative humidity
-    RHs = RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water)
+    RHs = RHs_model(ea, esat, delta, LST_soil, t_avg, mu_s, water)
     
     # Soil and canopy LST
-    LST_canopy = canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma)
+    LST_canopy = canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, delta, gamma)
     LST_soil = soil_LST(LST_avg, LST_canopy, Rs_MJ_cor, Rld_MJ, tauS, tauL, emissivity, albedo)
-    # LST_canopy, LST_soil = canopy_and_soil_LST(
-    #     LST_avg, t_avg, Rs_MJ_cor, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo
-    # )
 
     # Daily mean net radiation (total, soil and canopy, soil heat flux) (MJ m-2 d-1)
     Rn, Rnc, Rns, G, AEs = net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ_cor, Rld_MJ, albedo, tauS, tauL)
@@ -193,21 +186,20 @@ def et(
     AEsi = isothermal_soil_available_energy(AEs, emissivity, t_avg, LST_soil)
 
     # mu terms
-    mu_c = mu_canopy(Rnc, Rnci, DELTA, gamma)
-    mu_s = mu_soil(AEs, AEsi, RHs, DELTA, gamma)
+    mu_c = mu_canopy(Rnc, Rnci, delta, gamma)
+    mu_s = mu_soil(AEs, AEsi, RHs, delta, gamma)
 
     ###########################
     # ET model (mm/day)
     ###########################
 
-    # TODO: Change order of inputs to Rnc, DELTA, gamma to make clear calculation
-    #   is working off Rnc for setting the output image projection
     # ET_DIF (mm/day)
-    ET_DIF = DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s)
+    ET_DIF = DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma)
 
     # TODO: Rename to something more distinct from vapor pressure "ea" variable
+    #   Maybe "ET_PEN", "ET_AERO", "ET_PENMAN"?
     # Penman aerodynamic term
-    Ea = aerodynamic_term(del_LC, fc, LST_soil, RHs, gamma, DELTA, u2, esat, ea)
+    Ea = aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, esat, ea)
 
     return ET_DIF.add(Ea).rename("ET")
 
@@ -291,14 +283,14 @@ def clear_sky_terms(time_start, lat, elev, srad):
     phi = lat.multiply(pi / 180)
 
     dr = ee.Image().expression("1 + 0.033 * cos(2 * PI / 365 * J)", {"PI": pi, "J": J})
-    delta = ee.Image().expression("0.409 * sin(2 * PI / 365 * J - 1.39)", {"PI": pi, "J": J})
-    cosW = ee.Image().expression("-tan(phi) * tan(delta)", {"phi": phi, "delta": delta})
+    declination = ee.Image().expression("0.409 * sin(2 * PI / 365 * J - 1.39)", {"PI": pi, "J": J})
+    cosW = ee.Image().expression("-tan(phi) * tan(delta)", {"phi": phi, "delta": declination})
     omega = cosW.clamp(-1, 1).acos()
     sunrise_ts = omega.multiply(24 / pi).divide(2).multiply(-1).add(12)
 
     Ra_MJ = phi.expression(
         "(24 / PI) * 4.92 * dr * (omega * sin(phi) * sin(delta) + cos(phi) * cos(delta) * sin(omega))",
-        {"PI": pi, "dr": dr, "omega": omega, "phi": phi, "delta": delta},
+        {"PI": pi, "dr": dr, "omega": omega, "phi": phi, "delta": declination},
     )
     Rso_MJ = elev.multiply(2e-5).add(0.75).multiply(Ra_MJ)
 
@@ -337,7 +329,7 @@ def daily_avg_lst(tminK, lst, sunrise_ts, t_avg):
     return LST_max.add(LST_min).multiply(0.5).max(t_avg)
 
 
-def canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma):
+def canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, delta, gamma):
     """Canopy land surface temperature
 
     Parameters
@@ -349,12 +341,10 @@ def canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma):
     fc : ee.Image
         Fraction of net radiation absorbed by the canopy.
     mu_c : ee.Image
-
     mu_s : ee.Image
-
     RHs : ee.Image
         Soil surface relative humidity.
-    DELTA : ee.Image
+    delta : ee.Image
         Slope of vapor pressure curve.
     gamma : ee.Image
         Psychrometric constant.
@@ -365,8 +355,8 @@ def canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma):
 
     """
     beta = ee.Image().expression(
-        "fc / (fc + mu_s / mu_c * (1 - fc) * (DELTA + gamma * mu_c) / (DELTA * RHs + gamma * mu_s))",
-        {"fc": fc, "DELTA": DELTA, "gamma": gamma, "RHs": RHs, "mu_c": mu_c, "mu_s": mu_s}
+        "fc / (fc + mu_s / mu_c * (1 - fc) * (delta + gamma * mu_c) / (delta * RHs + gamma * mu_s))",
+        {"fc": fc, "delta": delta, "gamma": gamma, "RHs": RHs, "mu_c": mu_c, "mu_s": mu_s}
     )
     
     return ee.Image().expression(
@@ -420,7 +410,7 @@ def soil_LST(LST_avg, LST_canopy, Rs_MJ, Rld_MJ, tauS, tauL, emissivity, albedo)
     return LST_soil.min(LST_soil_max).rename('LST_soil')
 
 
-def RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water):
+def RHs_model(ea, esat, delta, LST_soil, t_avg, mu_s, water):
     """Soil surface relative humidity
 
     Parameters
@@ -429,14 +419,13 @@ def RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water):
         Vapor pressure [kPa].
     esat : ee.Image
         Saturated vapor pressure [kPa].
-    DELTA : ee.Image
+    delta : ee.Image
         Slope of vapor pressure curve
     LST_soil : ee.Image
         Soil land surface temperature [K].
     t_avg : ee.Image
         Average air temperature [K].
     mu_s : ee.Image
-
     water : ee.Image
         Water mask with water pixels assigned a value of 1.
 
@@ -446,8 +435,8 @@ def RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water):
 
     """
     RHs = ee.Image().expression(
-        "ea / (esat + DELTA * (LST_soil - ta) * (mu_s - 1) / mu_s)",
-        {"ea": ea, "esat": esat, "mu_s": mu_s, "DELTA": DELTA, "LST_soil": LST_soil, "ta": t_avg}
+        "ea / (esat + delta * (LST_soil - ta) * (mu_s - 1) / mu_s)",
+        {"ea": ea, "esat": esat, "mu_s": mu_s, "delta": delta, "LST_soil": LST_soil, "ta": t_avg}
     )
     
     return RHs.where(water, 1).rename("RHs")
@@ -561,7 +550,7 @@ def isothermal_soil_available_energy(AEs, emissivity, t_avg, LST_soil):
     ).rename("AEsi")
 
 
-def mu_canopy(Rnc, Rnci, DELTA, gamma):
+def mu_canopy(Rnc, Rnci, delta, gamma):
     """
 
     Parameters
@@ -570,7 +559,7 @@ def mu_canopy(Rnc, Rnci, DELTA, gamma):
         Net radiation at the canopy [MJ m-2 d-1].
     Rnci : ee.Image
         Isothermal net radiation at the canopy [MJ m-2 d-1].
-    DELTA : ee.Image
+    delta : ee.Image
         Slope of vapor pressure curve.
     gamma : ee.Image
         Psychrometric constant.
@@ -585,12 +574,12 @@ def mu_canopy(Rnc, Rnci, DELTA, gamma):
     Rnci_safe = Rnci.max(Rnc_safe)
     
     return ee.Image().expression(
-        "(Rnci + sqrt(Rnci ** 2 + 4 * DELTA / gamma * Rnc * (Rnci - Rnc))) / (2 * Rnc)",
-        {"Rnc": Rnc_safe, "Rnci": Rnci_safe, "DELTA": DELTA, "gamma": gamma}
+        "(Rnci + sqrt(Rnci ** 2 + 4 * delta / gamma * Rnc * (Rnci - Rnc))) / (2 * Rnc)",
+        {"Rnc": Rnc_safe, "Rnci": Rnci_safe, "delta": delta, "gamma": gamma}
     ).max(1).rename("mu_c")
 
 
-def mu_soil(AEs, AEsi, RHs, DELTA, gamma):
+def mu_soil(AEs, AEsi, RHs, delta, gamma):
     """
 
     Parameters
@@ -601,7 +590,7 @@ def mu_soil(AEs, AEsi, RHs, DELTA, gamma):
         Isothermal available energy at the soil surface [MJ m-2 d-1].
     RHs : ee.Image
         Soil surface relative humidity.
-    DELTA : ee.Image
+    delta : ee.Image
         Slope of vapor pressure curve.
     gamma : ee.Image
         Psychrometric constant.
@@ -616,20 +605,16 @@ def mu_soil(AEs, AEsi, RHs, DELTA, gamma):
     AEsi_safe = AEsi.max(AEs_safe)
 
     return ee.Image().expression(
-        "(AEsi + sqrt(AEsi ** 2 + 4 * RHs * DELTA / gamma * AEs * (AEsi - AEs))) / (2 * AEs)",
-        {"AEs": AEs_safe, "AEsi": AEsi_safe, "DELTA": DELTA, "gamma": gamma, "RHs": RHs}
+        "(AEsi + sqrt(AEsi ** 2 + 4 * RHs * delta / gamma * AEs * (AEsi - AEs))) / (2 * AEs)",
+        {"AEs": AEs_safe, "AEsi": AEsi_safe, "delta": delta, "gamma": gamma, "RHs": RHs}
     ).max(1).rename("mu_s")
 
 
-def DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s):
+def DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma):
     """
 
     Parameters
     ----------
-    gamma : ee.Image
-        Psychrometric constant.
-    DELTA : ee.Image
-        Slope of vapor pressure curve.
     Rnc : ee.Image
         Net radiation at the canopy [MJ m-2 d-1].
     AEs : ee.Image
@@ -637,9 +622,11 @@ def DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s):
     RHs : ee.Image
         Soil surface relative humidity.
     mu_c : ee.Image
-
     mu_s : ee.Image
-
+    delta : ee.Image
+        Slope of vapor pressure curve.
+    gamma : ee.Image
+        Psychrometric constant.
 
     Returns
     -------
@@ -648,30 +635,29 @@ def DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s):
     """
     return (
         Rnc.expression(
-            "(Rnc * DELTA / (DELTA + gamma * mu_c) + RHs * DELTA / (RHs * DELTA + gamma * mu_s) * AEs) / 2.45",
-            {"Rnc": Rnc, "DELTA": DELTA, "gamma": gamma, "AEs": AEs, "RHs": RHs, "mu_c": mu_c, "mu_s": mu_s},
+            "(Rnc * delta / (delta + gamma * mu_c) + RHs * delta / (RHs * delta + gamma * mu_s) * AEs) / 2.45",
+            {"Rnc": Rnc, "delta": delta, "gamma": gamma, "AEs": AEs, "RHs": RHs, "mu_c": mu_c, "mu_s": mu_s},
         )
         .max(0).rename("ET_DIF")
     )
 
 
-def aerodynamic_term(del_LC, fc, LST_soil, RHs, gamma, DELTA, u2, esat, ea):
+def aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, esat, ea):
     """
 
     Parameters
     ----------
     del_LC : ee.Image
-
     fc : ee.Image
         Fraction of net radiation absorbed by the canopy.
     LST_soil : ee.Image
         Soil land surface temperature [K].
     RHs : ee.Image
         Soil surface relative humidity.
+    delta : ee.Image
+        Slope of vapor pressure curve.
     gamma : ee.Image
         Psychrometric constant.
-    DELTA : ee.Image
-        Slope of vapor pressure curve.
     u2 : ee.Image
         Wind speed at 2 m height [m s-1].
     esat : ee.Image
@@ -694,9 +680,9 @@ def aerodynamic_term(del_LC, fc, LST_soil, RHs, gamma, DELTA, u2, esat, ea):
     )
     
     return ee.Image().expression(
-        "del_LC * del_water * gamma / (DELTA + gamma) * (esat - ea) * 2.6 * (1 + 0.54 * u2)",
+        "del_LC * del_water * gamma / (delta + gamma) * (esat - ea) * 2.6 * (1 + 0.54 * u2)",
         {
-            "gamma": gamma, "DELTA": DELTA, "u2": u2, "esat": esat, "ea":  ea,
+            "gamma": gamma, "delta": delta, "u2": u2, "esat": esat, "ea":  ea,
             "del_water": del_water, "del_LC": del_LC
         }
     ).rename("Ea")
@@ -805,10 +791,10 @@ def terrain_shade_correct_srad(Rs_MJ, Ra_MJ, elev, time_start, albedo, latitude,
         lat    = ee.Image(lat).multiply(pi/180.0)  # rad
         doy    = ee.Image(doy)
 
-        delta = ee.Image().expression("0.409 * sin(2 * pi / 365 * J - 1.39)", {"pi": pi, "J": doy})
+        declination = ee.Image().expression("0.409 * sin(2 * pi / 365 * J - 1.39)", {"pi": pi, "J": doy})
 
-        sin_d   = delta.sin()
-        cos_d   = delta.cos()
+        sin_d   = declination.sin()
+        cos_d   = declination.cos()
         sin_phi = lat.sin()
         cos_phi = lat.cos()
         sin_s   = slope.sin()
@@ -816,12 +802,12 @@ def terrain_shade_correct_srad(Rs_MJ, Ra_MJ, elev, time_start, albedo, latitude,
         cos_g   = aspect.cos()
         sin_g   = aspect.sin()
 
-        polarDay_NH   = delta.add(lat).gt(pi/2)
-        polarDay_SH   = delta.add(lat).lt(-pi/2)
+        polarDay_NH   = declination.add(lat).gt(pi/2)
+        polarDay_SH   = declination.add(lat).lt(-pi/2)
         condPolarDay  = polarDay_NH.Or(polarDay_SH)
 
-        polarNight_NH  = delta.subtract(lat).gt(pi/2)
-        polarNight_SH  = delta.subtract(lat).lt(-pi/2)
+        polarNight_NH  = declination.subtract(lat).gt(pi/2)
+        polarNight_SH  = declination.subtract(lat).lt(-pi/2)
         condPolarNight = polarNight_NH.Or(polarNight_SH)
 
         v124_polarDay   = ee.Image(-pi)
@@ -839,7 +825,7 @@ def terrain_shade_correct_srad(Rs_MJ, Ra_MJ, elev, time_start, albedo, latitude,
         )
         c = ee.Image().expression("cd * sg * ss", {"cd": cos_d, "sg": sin_g, "ss": sin_s})
 
-        vS = ee.Image().expression("acos(-tan(phi) * tan(delta))", {"phi": lat, "delta": delta})
+        vS = ee.Image().expression("acos(-tan(phi) * tan(delta))", {"phi": lat, "delta": declination})
         vS_neg = vS.multiply(-1)
 
         def cosu(v):
