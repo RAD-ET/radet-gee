@@ -204,17 +204,17 @@ def test_Rld_atm_ASCE(emissivity, fcd, ea, t_avg, expected):
     'tminK, lst, sunrise_ts, t_avg, expected',
     [
         # t_avg: (312.4 + 289.6) / 2 = 301
-        [289.6, 327, 4.7775, 301, 310.6],
-        [289.6, 323, 4.7775, 301, 308.3],
-        [289.6, 313, 4.7775, 301, 302.6],
-        [289.6, 304, 4.7775, 301, 301.0],
+        [289.6, 327, 4.7775, 301, 310.5813],
+        [289.6, 323, 4.7775, 301, 308.2916],
+        [289.6, 313, 4.7775, 301, 302.5673],
+        [289.6, 304, 4.7775, 301, 301.0000],
     ]
 )
 def test_daily_avg_lst(tminK, lst, sunrise_ts, t_avg, expected):
     output = utils.constant_image_value(
         model.daily_avg_lst(ee.Image(tminK), ee.Image(lst), sunrise_ts, t_avg)
     )
-    assert abs(output['constant'] - expected) <= 0.1
+    assert abs(output['constant'] - expected) <= 0.0001
 
 
 ################################################################################
@@ -232,43 +232,60 @@ def test_daily_avg_lst(tminK, lst, sunrise_ts, t_avg, expected):
         [1.5156, 3.7470, 0.2184, 310.0, 301, 1, 1, 1],
     ]
 )
-def test_RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water, RHs):
+def test_RHs_model_a(ea, esat, DELTA, LST_soil, t_avg, mu_s, water, RHs):
     output = utils.constant_image_value(model.RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water))
     # print('\n{:6.4f}'.format(output['RHs']))
     assert abs(output['RHs'] - RHs) <= 0.0001
 
 
 @pytest.mark.parametrize(
-    'LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo, LST_canopy, LST_soil',
+    'LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma, LST_canopy',
     [
         # RHs: 1.5156 / 3.7470 = 0.404484
         # gamma: 101.1818 * 0.000665 = 0.067286
-        # First run, LAI=0.1,0.5,2.0,3.5
-        [310.6, 301, 30.5, 32.5, 0.0392, 0.9455, 0.9094, 1, 1, 0.4045, 0.2184, 0.0673, 0.98, 0.18, 301.2, 311.5],
-        [308.3, 301, 30.5, 32.5, 0.1813, 0.7558, 0.6219, 1, 1, 0.4045, 0.2184, 0.0673, 0.97, 0.19, 301.8, 312.1],
-        [302.6, 301, 30.5, 32.5, 0.5507, 0.3263, 0.1496, 1, 1, 0.4045, 0.2184, 0.0673, 0.97, 0.19, 301.6, 307.9],
-        [301.0, 301, 30.5, 32.5, 0.7534, 0.1409, 0.0360, 1, 1, 0.4045, 0.2184, 0.0673, 0.97, 0.15, 301.0, 301.0],
+        # Tests correspond to LAI: 0.1, 0.5, 2.0, 3.5
+        [310.58, 301, 0.0392, 1, 1, 0.4045, 0.2184, 0.0673, 301.21],
+        [308.29, 301, 0.1813, 1, 1, 0.4045, 0.2184, 0.0673, 301.78],
+        [302.57, 301, 0.5507, 1, 1, 0.4045, 0.2184, 0.0673, 301.63],
+        [301.00, 301, 0.7534, 1, 1, 0.4045, 0.2184, 0.0673, 301.00],
     ]
 )
-def test_canopy_and_soil_LST(LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo, LST_canopy, LST_soil):
-    output = utils.constant_image_value(model.canopy_and_soil_LST(
-        LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo
-    ))
-    # print('\n{:5.1f}, {:5.1f}'.format(output['LST_canopy'], output['LST_soil']))
-    assert abs(output['LST_canopy'] - LST_canopy) <= 0.1
-    assert abs(output['LST_soil'] - LST_soil) <= 0.1
+def test_canopy_LST_a(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma, LST_canopy):
+    output = utils.constant_image_value(
+        model.canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma)
+    )
+    # print('\n{:6.2f}'.format(output['LST_canopy']))
+    assert abs(output['LST_canopy'] - LST_canopy) <= 0.01
+
+
+@pytest.mark.parametrize(
+    'LST_avg, LST_canopy, Rs_MJ, Rld_MJ, tauS, tauL, emissivity, albedo, LST_soil',
+    [
+        # Tests correspond to LAI: 0.1, 0.5, 2.0, 3.5
+        [310.58, 301.21, 30.56, 32.8159, 0.9455, 0.9094, 0.98, 0.18, 311.47],
+        [308.29, 301.78, 30.56, 32.4811, 0.7558, 0.6219, 0.97, 0.19, 312.05],
+        [302.57, 301.63, 30.56, 32.4811, 0.3263, 0.1496, 0.97, 0.19, 307.75],
+        [301.00, 301.00, 30.56, 32.4811, 0.1409, 0.0360, 0.97, 0.15, 301.00],
+    ]
+)
+def test_soil_LST_a(LST_avg, LST_canopy, Rs_MJ, Rld_MJ, tauS, tauL, emissivity, albedo, LST_soil):
+    output = utils.constant_image_value(
+        model.soil_LST(LST_avg, LST_canopy, Rs_MJ, Rld_MJ, tauS, tauL, emissivity, albedo)
+    )
+    # print('\n{:6.2f}'.format(output['LST_soil']))
+    assert abs(output['LST_soil'] - LST_soil) <= 0.01
 
 
 @pytest.mark.parametrize(
     'emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS, tauL, Rn, Rnc, Rns, G, AEs',
     [
-        [0.98, 301.2, 311.5, 30.5, 32.5, 0.18, 0.9455, 0.9094, 12.8043,  1.2417, 11.5626,  2.5469, 9.0157],
-        [0.97, 301.8, 312.1, 30.5, 32.5, 0.19, 0.7558, 0.6219, 14.2416,  5.5514,  8.6902,  1.5416, 7.1486],
-        [0.97, 301.6, 307.9, 30.5, 32.5, 0.19, 0.3263, 0.1496, 17.3625, 13.7148,  3.6476, -0.2233, 3.8710],
-        [0.97, 301.0, 301.0, 30.5, 32.5, 0.15, 0.1409, 0.0360, 19.4018, 15.9838,  3.4180, -0.3037, 3.7217],
+        [0.98, 301.21, 311.47, 30.56, 32.8159, 0.18, 0.9455, 0.9094, 13.1848,  1.2705, 11.9143,  2.6700,  9.2443],
+        [0.97, 301.78, 312.05, 30.56, 32.4811, 0.19, 0.7558, 0.6219, 14.2932,  5.5531,  8.7401,  1.5591,  7.1811],
+        [0.97, 301.63, 307.75, 30.56, 32.4811, 0.19, 0.3263, 0.1496, 17.3913, 13.6341,  3.7572, -0.1850,  3.9422],
+        [0.97, 301.00, 301.00, 30.56, 32.4811, 0.15, 0.1409, 0.0360, 19.4339, 16.0094,  3.4245, -0.3014,  3.7259],
     ]
 )
-def test_net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS, tauL, Rn, Rnc, Rns, G, AEs):
+def test_net_radiation_a(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS, tauL, Rn, Rnc, Rns, G, AEs):
     output = utils.constant_image_value(
         model.net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS, tauL)
     )
@@ -282,38 +299,70 @@ def test_net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, 
 
 
 @pytest.mark.parametrize(
-    'Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil, Rnci, AEsi',
+    'Rnc, tauL, emissivity, t_avg, LST_canopy, Rnci',
     [
-        [ 1.2417, 9.0157, 0.9094, 0.98, 301, 307.0, 312.4,  1.8113, 20.9278],
-        [ 5.5514, 7.1486, 0.6219, 0.97, 301, 303.9, 316.2,  6.6886, 22.9501],
-        [13.7148, 3.8710, 0.1496, 0.97, 301, 301.2, 303.5, 13.8912,  6.4699],
-        [15.9838, 3.7217, 0.0360, 0.97, 301, 301.0, 301.0, 15.9838,  3.7217],
+        [ 1.2705, 0.9094, 0.98, 301, 301.21,  1.2904],
+        [ 5.5531, 0.6219, 0.97, 301, 301.78,  5.8590],
+        [13.6341, 0.1496, 0.97, 301, 301.63, 14.1898],
+        [16.0094, 0.0360, 0.97, 301, 301.00, 16.0094],
     ]
 )
-def test_isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil, Rnci, AEsi):
+def test_isothermal_canopy_net_radiation_a(Rnc, tauL, emissivity, t_avg, LST_canopy, Rnci):
     output = utils.constant_image_value(
-        model.isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil)
+        model.isothermal_canopy_net_radiation(Rnc, tauL, emissivity, t_avg, LST_canopy)
     )
-    # print('\n{:7.4f}, {:7.4f}'.format(output['Rnci'], output['AEsi']))
+    # print('\n{:7.4f}'.format(output['Rnci']))
     assert abs(output['Rnci'] - Rnci) <= 0.0001
+
+
+@pytest.mark.parametrize(
+    'AEs, emissivity, t_avg, LST_soil, AEsi',
+    [
+        [9.2443, 0.98, 301, 311.47, 20.1846],
+        [7.1811, 0.97, 301, 312.05, 18.6684],
+        [3.9422, 0.97, 301, 307.75, 10.9593],
+        [3.7259, 0.97, 301, 301.00,  3.7259],
+    ]
+)
+def test_isothermal_soil_available_energy_a(AEs, emissivity, t_avg, LST_soil, AEsi):
+    output = utils.constant_image_value(
+        model.isothermal_soil_available_energy(AEs, emissivity, t_avg, LST_soil)
+    )
+    # print('\n{:7.4f}'.format(output['AEsi']))
     assert abs(output['AEsi'] - AEsi) <= 0.0001
 
 
 @pytest.mark.parametrize(
-    'Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs, mu_c, mu_s',
+    'Rnc, Rnci, DELTA, gamma, mu_c',
     [
-        [ 1.2417,  1.8113, 0.2184, 0.0673, 9.0157, 20.9278, 0.4045, 2.1508, 2.9160],
-        [ 5.5514,  6.6886, 0.2184, 0.0673, 7.1486, 22.9501, 0.4045, 1.6162, 3.9458],
-        [13.7148, 13.8912, 0.2184, 0.0673, 3.8710,  6.4699, 0.4045, 1.0525, 2.0925],
-        [15.9838, 15.9838, 0.2184, 0.0673, 3.7217,  3.7217, 0.4045, 1.0000, 1.0000],
+        [ 1.2705,  1.2904, 0.2184, 0.0673, 1.0635],
+        [ 5.5531,  5.8590, 0.2184, 0.0673, 1.2036],
+        [13.6341, 14.1898, 0.2184, 0.0673, 1.1553],
+        [16.0094, 16.0094, 0.2184, 0.0673, 1.0000],
     ]
 )
-def test_mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs, mu_c, mu_s):
+def test_mu_canopy_a(Rnc, Rnci, DELTA, gamma, mu_c):
     output = utils.constant_image_value(
-        model.mu_terms(ee.Image(Rnc), ee.Image(Rnci), DELTA, gamma, ee.Image(AEs), ee.Image(AEsi), RHs)
+        model.mu_canopy(ee.Image(Rnc), ee.Image(Rnci), DELTA, gamma)
     )
-    # print('\n{:6.4f}, {:6.4f}'.format(output['mu_c'], output['mu_s']))
+    # print('\n{:6.4f}'.format(output['mu_c']))
     assert abs(output['mu_c'] - mu_c) <= 0.0001
+
+
+@pytest.mark.parametrize(
+    'AEs, AEsi, RHs, DELTA, gamma, mu_s',
+    [
+        [9.2443, 20.1846, 0.4045, 0.2184, 0.0673, 2.7487],
+        [7.1811, 18.6684, 0.4045, 0.2184, 0.0673, 3.2465],
+        [3.9422, 10.9593, 0.4045, 0.2184, 0.0673, 3.4561],
+        [3.7259,  3.7259, 0.4045, 0.2184, 0.0673, 1.0000],
+    ]
+)
+def test_mu_soil_a(AEs, AEsi, RHs, DELTA, gamma, mu_s):
+    output = utils.constant_image_value(
+        model.mu_soil(ee.Image(AEs), ee.Image(AEsi), RHs, DELTA, gamma)
+    )
+    # print('\n{:6.4f}'.format(output['mu_s']))
     assert abs(output['mu_s'] - mu_s) <= 0.0001
 
 
@@ -324,10 +373,10 @@ def test_mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs, mu_c, mu_s):
 @pytest.mark.parametrize(
     'ea, esat, DELTA, LST_soil, t_avg, mu_s, water, RHs',
     [
-        [1.5156, 3.7470, 0.2184, 311.5, 301, 2.9160, 0, 0.2885],
-        [1.5156, 3.7470, 0.2184, 312.1, 301, 3.9458, 0, 0.2727],
-        [1.5156, 3.7470, 0.2184, 307.9, 301, 2.0925, 0, 0.3343],
-        [1.5156, 3.7470, 0.2184, 301.0, 301, 1.0000, 0, 0.4045],
+        [1.5156, 3.7470, 0.2184, 311.47, 301, 2.7487, 0, 0.2914],
+        [1.5156, 3.7470, 0.2184, 312.05, 301, 3.2465, 0, 0.2798],
+        [1.5156, 3.7470, 0.2184, 307.75, 301, 3.4561, 0, 0.3161],
+        [1.5156, 3.7470, 0.2184, 301.00, 301, 1.0000, 0, 0.4045],
     ]
 )
 def test_RHs_model_b(ea, esat, DELTA, LST_soil, t_avg, mu_s, water, RHs):
@@ -337,32 +386,46 @@ def test_RHs_model_b(ea, esat, DELTA, LST_soil, t_avg, mu_s, water, RHs):
 
 
 @pytest.mark.parametrize(
-    'LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo, LST_canopy, LST_soil',
+    'LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma, LST_canopy',
     [
-        # RHs: 1.5156 / 3.7470 = 0.404484
-        # gamma: 101.1818 * 0.000665 = 0.067286
-        [310.6, 301, 30.5, 32.5, 0.0392, 0.9455, 0.9094, 2.1508, 2.9160, 0.2885, 0.2184, 0.0673, 0.98, 0.18, 301.2, 311.5],
-        [308.3, 301, 30.5, 32.5, 0.1813, 0.7558, 0.6219, 1.6162, 3.9458, 0.2727, 0.2184, 0.0673, 0.97, 0.19, 301.6, 312.2],
-        [302.6, 301, 30.5, 32.5, 0.5507, 0.3263, 0.1496, 1.0525, 2.0925, 0.3343, 0.2184, 0.0673, 0.97, 0.19, 301.5, 308.6],
-        [301.0, 301, 30.5, 32.5, 0.7534, 0.1409, 0.0360, 1.0000, 1.0000, 0.4045, 0.2184, 0.0673, 0.97, 0.15, 301.0, 301.0],
+        [310.58, 301, 0.0392, 1.0635, 2.7487, 0.2914, 0.2184, 0.0673, 301.13],
+        [308.29, 301, 0.1813, 1.2036, 3.2465, 0.2798, 0.2184, 0.0673, 301.52],
+        [302.57, 301, 0.5507, 1.1553, 3.4561, 0.3161, 0.2184, 0.0673, 301.47],
+        [301.00, 301, 0.7534, 1.0000, 1.0000, 0.4045, 0.2184, 0.0673, 301.00],
     ]
 )
-def test_canopy_and_soil_LST_b(LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo, LST_canopy, LST_soil):
-    output = utils.constant_image_value(model.canopy_and_soil_LST(
-        LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo
-    ))
-    # print('\n{:5.1f}, {:5.1f}'.format(output['LST_canopy'], output['LST_soil']))
+def test_canopy_LST_b(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma, LST_canopy):
+    output = utils.constant_image_value(
+        model.canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma)
+    )
+    # print('\n{:5.1f}'.format(output['LST_canopy']))
     assert abs(output['LST_canopy'] - LST_canopy) <= 0.1
+
+
+@pytest.mark.parametrize(
+    'LST_avg, LST_canopy, Rs_MJ, Rld_MJ, tauS, tauL, emissivity, albedo, LST_soil',
+    [
+        [310.58, 301.13, 30.56, 32.8159, 0.9455, 0.9094, 0.98, 0.18, 311.50],
+        [308.29, 301.52, 30.56, 32.4811, 0.7558, 0.6219, 0.97, 0.19, 312.21],
+        [302.57, 301.47, 30.56, 32.4811, 0.3263, 0.1496, 0.97, 0.19, 308.60],
+        [301.00, 301.00, 30.56, 32.4811, 0.1409, 0.0360, 0.97, 0.15, 301.00],
+    ]
+)
+def test_soil_LST_b(LST_avg, LST_canopy, Rs_MJ, Rld_MJ, tauS, tauL, emissivity, albedo, LST_soil):
+    output = utils.constant_image_value(
+        model.soil_LST(LST_avg, LST_canopy, Rs_MJ, Rld_MJ, tauS, tauL, emissivity, albedo)
+    )
+    # print('\n{:5.1f}'.format(output['LST_soil']))
     assert abs(output['LST_soil'] - LST_soil) <= 0.1
 
 
 @pytest.mark.parametrize(
     'emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS, tauL, Rn, Rnc, Rns, G, AEs',
     [
-        [0.98, 301.2, 311.5, 30.5, 32.5, 0.18, 0.9455, 0.9094, 12.8043,  1.2417, 11.5626,  2.5469,  9.0157],
-        [0.97, 301.6, 312.2, 30.5, 32.5, 0.19, 0.7558, 0.6219, 14.2451,  5.6522,  8.5929,  1.5075,  7.0854],
-        [0.97, 301.5, 308.6, 30.5, 32.5, 0.19, 0.3263, 0.1496, 17.3485, 14.1351,  3.2134, -0.3753,  3.5887],
-        [0.97, 301.0, 301.0, 30.5, 32.5, 0.15, 0.1409, 0.0360, 19.4018, 15.9838,  3.4180, -0.3037,  3.7217],
+        [0.98, 301.13, 311.50, 30.56, 32.8159, 0.18, 0.9455, 0.9094, 13.1727,  1.2797, 11.8931,  2.6626,  9.2305],
+        [0.97, 301.52, 312.21, 30.56, 32.4811, 0.19, 0.7558, 0.6219, 14.2870,  5.6907,  8.5963,  1.5087,  7.0876],
+        [0.97, 301.47, 308.60, 30.56, 32.4811, 0.19, 0.3263, 0.1496, 17.3915, 14.1783,  3.2132, -0.3754,  3.5886],
+        [0.97, 301.00, 301.00, 30.56, 32.4811, 0.15, 0.1409, 0.0360, 19.4339, 16.0094,  3.4245, -0.3014,  3.7259],
     ]
 )
 def test_net_radiation_b(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS, tauL, Rn, Rnc, Rns, G, AEs):
@@ -379,38 +442,70 @@ def test_net_radiation_b(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo
 
 
 @pytest.mark.parametrize(
-    'Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil, Rnci, AEsi',
+    'Rnc, tauL, emissivity, t_avg, LST_canopy, Rnci',
     [
-        [ 1.2417, 9.0157, 0.9094, 0.98, 301, 301.2, 311.5,  1.2607, 19.9874],
-        [ 5.6522, 7.0854, 0.6219, 0.97, 301, 301.6, 312.2,  5.8875, 18.7286],
-        [14.1351, 3.5887, 0.1496, 0.97, 301, 301.5, 308.6, 14.5761, 11.4895],
-        [15.9838, 3.7217, 0.0360, 0.97, 301, 301.0, 301.0, 15.9838,  3.7217],
+        [ 1.2797, 0.9094, 0.98, 301, 301.13,  1.2920],
+        [ 5.6907, 0.6219, 0.97, 301, 301.52,  5.8946],
+        [14.1783, 0.1496, 0.97, 301, 301.47, 14.5928],
+        [16.0094, 0.0360, 0.97, 301, 301.00, 16.0094],
     ]
 )
-def test_isothermal_net_radiation_b(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil, Rnci, AEsi):
+def test_isothermal_canopy_net_radiation_b(Rnc, tauL, emissivity, t_avg, LST_canopy, Rnci):
     output = utils.constant_image_value(
-        model.isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil)
+        model.isothermal_canopy_net_radiation(Rnc, tauL, emissivity, t_avg, LST_canopy)
     )
-    # print('\n{:7.4f}, {:7.4f}'.format(output['Rnci'], output['AEsi']))
+    # print('\n{:7.4f}'.format(output['Rnci']))
     assert abs(output['Rnci'] - Rnci) <= 0.0001
+
+
+@pytest.mark.parametrize(
+    'AEs, emissivity, t_avg, LST_soil, AEsi',
+    [
+        [9.2305, 0.98, 301, 311.50, 20.2022],
+        [7.0876, 0.97, 301, 312.21, 18.7412],
+        [3.5886, 0.97, 301, 308.60, 11.4894],
+        [3.7259, 0.97, 301, 301.00,  3.7259],
+    ]
+)
+def test_isothermal_soil_available_energy_b(AEs, emissivity, t_avg, LST_soil, AEsi):
+    output = utils.constant_image_value(
+        model.isothermal_soil_available_energy(AEs, emissivity, t_avg, LST_soil)
+    )
+    # print('\n{:7.4f}'.format(output['AEsi']))
     assert abs(output['AEsi'] - AEsi) <= 0.0001
 
 
 @pytest.mark.parametrize(
-    'Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs, mu_c, mu_s',
+    'Rnc, Rnci, DELTA, gamma, mu_c',
     [
-        [ 1.2417,  1.2607, 0.2184, 0.0673, 9.0157, 19.9874, 0.2885, 1.0621, 2.6473],
-        [ 5.6522,  5.8875, 0.2184, 0.0673, 7.0854, 18.7286, 0.2727, 1.1583, 3.1107],
-        [14.1351, 14.5761, 0.2184, 0.0673, 3.5887, 11.4895, 0.3343, 1.1215, 3.8259],
-        [15.9838, 15.9838, 0.2184, 0.0673, 3.7217,  3.7217, 0.4045, 1.0000, 1.0000],
+        [ 1.2797,  1.2920, 0.2184, 0.0673, 1.0396],
+        [ 5.6907,  5.8946, 0.2184, 0.0673, 1.1380],
+        [14.1783, 14.5928, 0.2184, 0.0673, 1.1144],
+        [16.0094, 16.0094, 0.2184, 0.0673, 1.0000],
     ]
 )
-def test_mu_terms_b(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs, mu_c, mu_s):
+def test_mu_canopy_b(Rnc, Rnci, DELTA, gamma, mu_c):
     output = utils.constant_image_value(
-        model.mu_terms(ee.Image(Rnc), ee.Image(Rnci), DELTA, gamma, ee.Image(AEs), ee.Image(AEsi), RHs)
+        model.mu_canopy(ee.Image(Rnc), ee.Image(Rnci), DELTA, gamma)
     )
-    # print('\n{:6.4f}, {:6.4f}'.format(output['mu_c'], output['mu_s']))
+    # print('\n{:6.4f}'.format(output['mu_c']))
     assert abs(output['mu_c'] - mu_c) <= 0.0001
+
+
+@pytest.mark.parametrize(
+    'AEs, AEsi, RHs, DELTA, gamma, mu_s',
+    [
+        [9.2305, 20.2022, 0.2914, 0.2184, 0.0673, 2.6180],
+        [7.0876, 18.7412, 0.2798, 0.2184, 0.0673, 3.1224],
+        [3.5886, 11.4894, 0.3161, 0.2184, 0.0673, 3.7965],
+        [3.7259,  3.7259, 0.4045, 0.2184, 0.0673, 1.0000],
+    ]
+)
+def test_mu_soil_b(AEs, AEsi, RHs, DELTA, gamma, mu_s):
+    output = utils.constant_image_value(
+        model.mu_soil(ee.Image(AEs), ee.Image(AEsi), RHs, DELTA, gamma)
+    )
+    # print('\n{:6.4f}'.format(output['mu_s']))
     assert abs(output['mu_s'] - mu_s) <= 0.0001
 
 
@@ -421,10 +516,10 @@ def test_mu_terms_b(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs, mu_c, mu_s):
 @pytest.mark.parametrize(
     'gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s, expected',
     [
-        [0.0673, 0.2184,  1.2417, 9.0157, 0.2885, 1.0621, 2.6473, 1.3432],
-        [0.0673, 0.2184,  5.6522, 7.0854, 0.2727, 1.1583, 3.1107, 2.3407],
-        [0.0673, 0.2184, 14.1351, 3.5887, 0.3343, 1.1215, 3.8259, 4.6112],
-        [0.0673, 0.2184, 15.9838, 3.7217, 0.4045, 1.0000, 1.0000, 5.8494],
+        [0.0673, 0.2184,  1.2797, 9.2305, 0.2914, 1.0396, 2.6180, 1.3953],
+        [0.0673, 0.2184,  5.6907, 7.0876, 0.2798, 1.1380, 3.1224, 2.3714],
+        [0.0673, 0.2184, 14.1783, 3.5886, 0.3161, 1.1144, 3.7965, 4.6193],
+        [0.0673, 0.2184, 16.0094, 3.7259, 0.4045, 1.0000, 1.0000, 5.8584],
     ]
 )
 def test_DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s, expected):
@@ -442,15 +537,15 @@ def test_DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s, expected):
     'del_LC, fc, LST_soil, RHs, gamma, DELTA, u2, ea, esat, expected',
     [
         # Non-wet landcover
-        [0, 0.0392, 311.5, 0.2885, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.0],
-        [0, 0.1813, 312.2, 0.2727, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.0],
-        [0, 0.5507, 308.6, 0.3343, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.0],
-        [0, 0.7534, 301.0, 0.4045, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.0],
+        [0, 0.0392, 311.50, 0.2914, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.0],
+        [0, 0.1813, 312.21, 0.2798, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.0],
+        [0, 0.5507, 308.60, 0.3161, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.0],
+        [0, 0.7534, 301.00, 0.4045, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.0],
         # Wet landcover
-        [1, 0.0392, 311.5, 0.2885, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.0983],
-        [1, 0.1813, 312.2, 0.2727, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.4305],
-        [1, 0.5507, 308.6, 0.3343, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 1.3156],
-        [1, 0.7534, 301.0, 0.4045, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 1.8554],
+        [1, 0.0392, 311.50, 0.2914, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.0983],
+        [1, 0.1813, 312.21, 0.2798, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 0.4305],
+        [1, 0.5507, 308.60, 0.3161, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 1.3156],
+        [1, 0.7534, 301.00, 0.4045, 0.0673, 0.2184, 1.3463, 1.5156, 3.7470, 1.8554],
     ]
 )
 def test_aerodynamic_term(del_LC, fc, LST_soil, RHs, gamma, DELTA, u2, ea, esat, expected):

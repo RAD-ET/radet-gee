@@ -154,18 +154,22 @@ def et(
     RHs = ea.divide(esat)
 
     # Soil and canopy LST
-    LST_canopy, LST_soil = canopy_and_soil_LST(
-        LST_avg, t_avg, Rs_MJ_cor, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo
-    )
+    LST_canopy = canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma)
+    LST_soil = soil_LST(LST_avg, LST_canopy, Rs_MJ_cor, Rld_MJ, tauS, tauL, emissivity, albedo)
+    # LST_canopy, LST_soil = canopy_and_soil_LST(
+    #     LST_avg, t_avg, Rs_MJ_cor, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo
+    # )
 
     # Daily mean net radiation (total, soil and canopy, soil heat flux) (MJ m-2 d-1)
     Rn, Rnc, Rns, G, AEs = net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ_cor, Rld_MJ, albedo, tauS, tauL)
 
     # Isothermal canopy net radiation and isothermal soil available energy
-    Rnci, AEsi = isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil)
+    Rnci = isothermal_canopy_net_radiation(Rnc, tauL, emissivity, t_avg, LST_canopy)
+    AEsi = isothermal_soil_available_energy(AEs, emissivity, t_avg, LST_soil)
 
     # mu terms
-    mu_c, mu_s = mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs)
+    mu_c = mu_canopy(Rnc, Rnci, DELTA, gamma)
+    mu_s = mu_soil(AEs, AEsi, RHs, DELTA, gamma, )
 
     ###########################
     ### Second run
@@ -175,18 +179,22 @@ def et(
     RHs = RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water)
     
     # Soil and canopy LST
-    LST_canopy, LST_soil = canopy_and_soil_LST(
-        LST_avg, t_avg, Rs_MJ_cor, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo
-    )
+    LST_canopy = canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma)
+    LST_soil = soil_LST(LST_avg, LST_canopy, Rs_MJ_cor, Rld_MJ, tauS, tauL, emissivity, albedo)
+    # LST_canopy, LST_soil = canopy_and_soil_LST(
+    #     LST_avg, t_avg, Rs_MJ_cor, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo
+    # )
 
     # Daily mean net radiation (total, soil and canopy, soil heat flux) (MJ m-2 d-1)
     Rn, Rnc, Rns, G, AEs = net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ_cor, Rld_MJ, albedo, tauS, tauL)
 
     # Isothermal canopy net radiation and isothermal soil available energy
-    Rnci, AEsi = isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil)
+    Rnci = isothermal_canopy_net_radiation(Rnc, tauL, emissivity, t_avg, LST_canopy)
+    AEsi = isothermal_soil_available_energy(AEs, emissivity, t_avg, LST_soil)
 
     # mu terms
-    mu_c, mu_s = mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs)
+    mu_c = mu_canopy(Rnc, Rnci, DELTA, gamma)
+    mu_s = mu_soil(AEs, AEsi, RHs, DELTA, gamma)
 
     ###########################
     # ET model (mm/day)
@@ -325,12 +333,12 @@ def daily_avg_lst(tminK, lst, sunrise_ts, t_avg):
         "LST_min + (LST - LST_min) / (cos((10 - 12.5) / (12.5 - sunrise_ts) / 2 * PI))",
         {"PI": pi, "LST_min": LST_min, "LST": lst, "sunrise_ts": sunrise_ts},
     )
+
     return LST_max.add(LST_min).multiply(0.5).max(t_avg)
 
 
-# TODO: Split into two separate functions
-def canopy_and_soil_LST(LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_s, RHs, DELTA, gamma, emissivity, albedo):
-    """
+def canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, DELTA, gamma):
+    """Canopy land surface temperature
 
     Parameters
     ----------
@@ -338,16 +346,8 @@ def canopy_and_soil_LST(LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_
         Daily mean land surface temperature [K].
     t_avg : ee.Image
         Average air temperature [K].
-    Rs_MJ : ee.Image
-        Downward short wave radiation [MJ m-2 d-1].
-    Rld_MJ : ee.Image
-        Downward long wave radiation [MJ m-2 d-1].
     fc : ee.Image
         Fraction of net radiation absorbed by the canopy.
-    tauS : ee.Image
-        Daily shortwave transmissivity.
-    tauL : ee.Image
-        Daily longwave transmissivity.
     mu_c : ee.Image
 
     mu_s : ee.Image
@@ -358,6 +358,41 @@ def canopy_and_soil_LST(LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_
         Slope of vapor pressure curve.
     gamma : ee.Image
         Psychrometric constant.
+
+    Returns
+    -------
+    ee.Image
+
+    """
+    beta = ee.Image().expression(
+        "fc / (fc + mu_s / mu_c * (1 - fc) * (DELTA + gamma * mu_c) / (DELTA * RHs + gamma * mu_s))",
+        {"fc": fc, "DELTA": DELTA, "gamma": gamma, "RHs": RHs, "mu_c": mu_c, "mu_s": mu_s}
+    )
+    
+    return ee.Image().expression(
+        "t_avg + beta * (LST_avg - t_avg)", {"t_avg": t_avg, "LST_avg": LST_avg, "beta": beta}
+    ).rename('LST_canopy')
+
+
+def soil_LST(LST_avg, LST_canopy, Rs_MJ, Rld_MJ, tauS, tauL, emissivity, albedo):
+    """Soil land surface temperature
+
+    Parameters
+    ----------
+    LST_avg : ee.Image
+        Daily mean land surface temperature [K].
+    LST_canopy : ee.Image
+        Canopy land surface temperature [K].
+    t_avg : ee.Image
+        Average air temperature [K].
+    Rs_MJ : ee.Image
+        Downward short wave radiation [MJ m-2 d-1].
+    Rld_MJ : ee.Image
+        Downward long wave radiation [MJ m-2 d-1].
+    tauS : ee.Image
+        Daily shortwave transmissivity.
+    tauL : ee.Image
+        Daily longwave transmissivity.
     emissivity : ee.Image
         Broad-band surface emissivity.
     albedo : ee.Image
@@ -365,19 +400,9 @@ def canopy_and_soil_LST(LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_
 
     Returns
     -------
-    LST_canopy : ee.Image
-    LST_soil : ee.Image
+    ee.Image
 
     """
-    # Canopy LST
-    beta = ee.Image().expression(
-        "fc / (fc + mu_s / mu_c * (1 - fc) * (DELTA + gamma * mu_c) / (DELTA * RHs + gamma * mu_s))",
-        {"fc": fc, "DELTA": DELTA, "gamma": gamma, "RHs": RHs, "mu_c": mu_c, "mu_s": mu_s})
-    
-    LST_canopy = ee.Image().expression(
-        "t_avg + beta * (LST_avg - t_avg)", {"t_avg": t_avg, "LST_avg": LST_avg, "beta": beta}
-    ).rename('LST_canopy')
-    
     # Maximum soil LST
     LST_soil_max = ee.Image().expression(
         "((tauS * (1 - albedo) * Rs_MJ"
@@ -387,15 +412,12 @@ def canopy_and_soil_LST(LST_avg, t_avg, Rs_MJ, Rld_MJ, fc, tauS, tauL, mu_c, mu_
             "Rld": Rld_MJ, "LST_canopy": LST_canopy, "emis": emissivity, "SIG": SIG
         }
     )
-    
-    # Soil LST
     LST_soil = ee.Image().expression(
         "((LST_avg ** 4 - (1 - tauL) * (LST_canopy) ** 4) / tauL) ** (1 / 4)",
         {"LST_canopy": LST_canopy, "LST_avg": LST_avg, "tauL": tauL}
     )
-    LST_soil = LST_soil.min(LST_soil_max).rename('LST_soil')
-    
-    return LST_canopy, LST_soil
+
+    return LST_soil.min(LST_soil_max).rename('LST_soil')
 
 
 def RHs_model(ea, esat, DELTA, LST_soil, t_avg, mu_s, water):
@@ -484,16 +506,13 @@ def net_radiation(emissivity, LST_canopy, LST_soil, Rs_MJ, Rld_MJ, albedo, tauS,
     return Rnc.add(Rns).rename('Rn'), Rnc, Rns, G, Rns.subtract(G).rename('AEs')
 
 
-# TODO: Split into two separate functions
-def isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_soil):
-    """Isothermal canopy net radiation and isothermal soil available energy
+def isothermal_canopy_net_radiation(Rnc, tauL, emissivity, t_avg, LST_canopy):
+    """Isothermal canopy net radiation
 
     Parameters
     ----------
     Rnc : ee.Image
         Net radiation at the canopy [MJ m-2 d-1].
-    AEs : ee.Image
-        Available energy at the soil surface [MJ m-2 d-1].
     tauL : ee.Image
         Daily longwave transmissivity.
     emissivity : ee.Image
@@ -502,6 +521,29 @@ def isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_
         Average air temperature [K].
     LST_canopy : ee.Image
         Canopy land surface temperature [K].
+
+    Returns
+    -------
+    ee.Image
+
+    """
+    return ee.Image().expression(
+        "Rnc + 4 * 2 * (1 - tauL) * emis * SIG * ta ** 3 * (LST - ta)",
+        {"Rnc": Rnc, "tauL": tauL, "emis": emissivity, "SIG": SIG, "ta": t_avg, "LST": LST_canopy}
+    ).rename("Rnci")
+
+
+def isothermal_soil_available_energy(AEs, emissivity, t_avg, LST_soil):
+    """Isothermal soil available energy
+
+    Parameters
+    ----------
+    AEs : ee.Image
+        Available energy at the soil surface [MJ m-2 d-1].
+    emissivity : ee.Image
+        Broad-band surface emissivity.
+    t_avg : ee.Image
+        Average air temperature [K].
     LST_soil : ee.Image
         Soil land surface temperature [K].
 
@@ -510,26 +552,16 @@ def isothermal_net_radiation(Rnc, AEs, tauL, emissivity, t_avg, LST_canopy, LST_
     ee.Image
 
     """
-    Rnci  = ee.Image().expression(
-        "Rnc + 4 * 2 * (1 - tauL) * emis * SIG * ta ** 3 * (LST - ta)",
-        {"Rnc": Rnc, "tauL": tauL, "emis": emissivity, "SIG": SIG, "ta": t_avg, "LST": LST_canopy}
-    ).rename("Rnci")
-
-    # TODO: Switch to a number calculation instead of an image expression
     # Soil conductive exchange coefficient
-    # gg = 1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)
-    gg = ee.Image().expression("1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)", {"pi": pi})
+    gg = 1000 * ((pi / 86400) ** 0.5) * 86400 / (10 ** 6)
 
-    AEsi  = ee.Image().expression(
+    return ee.Image().expression(
         "AEs + (4 * emis * SIG * ta ** 3 + gg) * (LST - ta)",
         {"AEs": AEs, "emis": emissivity, "SIG": SIG, "ta": t_avg, "LST": LST_soil, "gg": gg}
     ).rename("AEsi")
 
-    return Rnci, AEsi
 
-
-# TODO: Split into two separate functions
-def mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs):
+def mu_canopy(Rnc, Rnci, DELTA, gamma):
     """
 
     Parameters
@@ -542,36 +574,51 @@ def mu_terms(Rnc, Rnci, DELTA, gamma, AEs, AEsi, RHs):
         Slope of vapor pressure curve.
     gamma : ee.Image
         Psychrometric constant.
+
+    Returns
+    -------
+    ee.Image
+
+    """
+
+    Rnc_safe = Rnc.max(0.001)
+    Rnci_safe = Rnci.max(Rnc_safe)
+    
+    return ee.Image().expression(
+        "(Rnci + sqrt(Rnci ** 2 + 4 * DELTA / gamma * Rnc * (Rnci - Rnc))) / (2 * Rnc)",
+        {"Rnc": Rnc_safe, "Rnci": Rnci_safe, "DELTA": DELTA, "gamma": gamma}
+    ).max(1).rename("mu_c")
+
+
+def mu_soil(AEs, AEsi, RHs, DELTA, gamma):
+    """
+
+    Parameters
+    ----------
     AEs : ee.Image
         Available energy at the soil surface [MJ m-2 d-1].
     AEsi : ee.Image
         Isothermal available energy at the soil surface [MJ m-2 d-1].
     RHs : ee.Image
         Soil surface relative humidity.
+    DELTA : ee.Image
+        Slope of vapor pressure curve.
+    gamma : ee.Image
+        Psychrometric constant.
 
     Returns
     -------
-    mu_c : ee.Image
-    mu_s : ee.Image
+    ee.Image
 
     """
 
-    Rnc_safe = Rnc.max(0.001)
     AEs_safe = AEs.max(0.001)
-    Rnci_safe = Rnci.max(Rnc_safe)
     AEsi_safe = AEsi.max(AEs_safe)
-    
-    mu_c = ee.Image().expression(
-        "(Rnci + sqrt(Rnci ** 2 + 4 * DELTA / gamma * Rnc * (Rnci - Rnc))) / (2 * Rnc)",
-        {"Rnc": Rnc_safe, "Rnci": Rnci_safe, "DELTA": DELTA, "gamma": gamma}
-    ).max(1).rename("mu_c")
 
-    mu_s = ee.Image().expression(
+    return ee.Image().expression(
         "(AEsi + sqrt(AEsi ** 2 + 4 * RHs * DELTA / gamma * AEs * (AEsi - AEs))) / (2 * AEs)",
         {"AEs": AEs_safe, "AEsi": AEsi_safe, "DELTA": DELTA, "gamma": gamma, "RHs": RHs}
     ).max(1).rename("mu_s")
-
-    return mu_c, mu_s
 
 
 def DIF_model(gamma, DELTA, Rnc, AEs, RHs, mu_c, mu_s):
