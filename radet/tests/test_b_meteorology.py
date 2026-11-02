@@ -56,3 +56,6 @@ def test_get_source_variable(source, variable, date, xy, expected, scale=4000, t
         source=source, variable=variable, time_start=utils.millis(datetime.strptime(date, '%Y-%m-%d'))
     )
     assert abs(utils.point_image_value(output, xy, scale)[variable] - expected) <= tol
+
+
+# TODO: Check that exceptions are raised for invalid meteorology sources
