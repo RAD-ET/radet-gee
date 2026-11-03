@@ -1,9 +1,9 @@
 import ee
-import openet.core.landsat
+# import openet.core.landsat
 
 
 def evi2(landsat_image):
-    """two band enhanced vegetation index (Jiang et al., 2008)
+    """Two band enhanced vegetation index
 
     Parameters
     ----------
@@ -16,6 +16,11 @@ def evi2(landsat_image):
 
     References
     ----------
+    .. [Jiang2008] Jiang, Z., Huete, A., Didan, K., Miura, T. (2008).
+        Development of a two-band enhanced vegetation index without a blue band.
+        Remote Sensing of Environment, 112, 3833–3845,
+        https://doi.org/10.1016/j.rse.2008.06.006
+
 
     """
     return landsat_image.expression(
@@ -38,7 +43,10 @@ def ndmi_scaled(landsat_image):
 
     References
     ----------
-    .. [Gao1996] Gao 1996.
+    .. [Gao1996] Gao B. (1996). NDWI—A normalized difference water index for
+        remote sensing of vegetation liquid water from space.
+        Remote Sensing of Environment, 58, 257-266,
+        https://doi.org/10.1016/S0034-4257(96)00067-3
 
     """
     return (
@@ -87,6 +95,10 @@ def ndvi(landsat_image):
 
     References
     ----------
+    .. [Gao1996] Gao B. (1996). NDWI—A normalized difference water index for
+        remote sensing of vegetation liquid water from space.
+        Remote Sensing of Environment, 58, 257-266,
+        https://doi.org/10.1016/S0034-4257(96)00067-3
 
     """
     return ee.Image(landsat_image).normalizedDifference(["nir", "red"]).rename(["ndvi"]).unmask(0)
@@ -106,6 +118,7 @@ def ndwi(landsat_image):
 
     References
     ----------
+
 
     """
     return ee.Image(landsat_image).normalizedDifference(["green", "nir"]).rename("ndwi").unmask(0)
@@ -151,8 +164,8 @@ def albedo_disalexi(landsat_image):
 
     References
     ----------
-    .. [Liang2001] Shunlin Liang (2001).  Narrowband to broadband conversions
-        of land surface albedo - I Algorithms,
+    .. [Liang2001] Liang S. (2001). Narrowband to broadband conversions
+        of land surface albedo - I Algorithms.
         Remote Sensing of Environment, Volume 76, Issue2, Pages 213-238,
         http://doi.org/10.1016/S0034-4257(00)00205-4
 
@@ -185,9 +198,9 @@ def albedo_l457(landsat_image):
 
     References
     ----------
-    .. [Tasumi2008] M. Tasumi, R. Allen, R; Trezza,
+    .. [Tasumi2008] Tasumi M., Allen R., Trezza R. (2008).
        At-Surface Reflectance and Albedo from Satellite for Operational
-       Calculation of Land Surface Energy Balance, Journal of Hydrology,
+       Calculation of Land Surface Energy Balance. Journal of Hydrology,
        https://doi.org/10.1061/(ASCE)1084-0699(2008)13:2(51)
 
     """
@@ -218,14 +231,14 @@ def albedo_l89(landsat_image):
 
     References
     ----------
-    .. [Ke2016] Y. Ke, J. Im, S. Park, H. Gong,
+    .. [Ke2016] Y. Ke, J. Im, S. Park, H. Gong (2016).
        Downscaling of MODIS One Kilometer Evapotranspiration
-       Using Landsat-8 Data and Machine Learning Approaches,
+       Using Landsat-8 Data and Machine Learning Approaches.
        Remote Sensing, https://doi.org/10.3390/rs8030215
 
     """
 
-    # CGM - These coefficients don"t sum to 1.0?
+    # CGM - These coefficients don't sum to 1.0?
     return landsat_image.expression(
         "(0.130 * B1) + (0.115 * B2) + (0.143 * B3) + (0.180 * B4) + "
         "(0.281 * B5) + (0.108 * B6) + (0.042 * B7)", {
@@ -257,9 +270,6 @@ def cloud_mask_sr_l457(landsat_image):
     clear sky value = 66  (01000010)
     water value = 68   (01000100)
 
-    References
-    ----------
-
     """
     quality = landsat_image.select("pixel_qa")
     c01 = quality.eq(66)  # Clear (01000010)
@@ -285,9 +295,6 @@ def cloud_mask_sr_l8(landsat_image):
     -----
     clear sky value = 322  (00101000010)
     water value = 324   (00101000100)
-
-    References
-    ----------
 
     """
     quality = landsat_image.select("pixel_qa")
@@ -316,9 +323,6 @@ def cloud_mask_C2_l457(landsat_image):
     clear sky value = 5440  (0001010101000000)
     water value     = 5504  (0001010110000000)
 
-    References
-    ----------
-
     """
     quality = landsat_image.select("QA_PIXEL")
     c01 = quality.eq(5440)
@@ -344,9 +348,6 @@ def cloud_mask_C2_l89(landsat_image):
     -----
     clear sky value = 21824  (0101010101000000)
     water value     = 21952  (0001010110000000)
-
-    References
-    ----------
 
     """
     quality = landsat_image.select("QA_PIXEL")
