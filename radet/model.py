@@ -165,7 +165,7 @@ def et(
 
     # mu terms
     mu_c = mu_canopy(Rnc, Rnci, delta, gamma)
-    mu_s = mu_soil(AEs, AEsi, RHs, delta, gamma, )
+    mu_s = mu_soil(AEs, AEsi, RHs, delta, gamma)
 
     ###########################
     ### Second run
@@ -196,12 +196,10 @@ def et(
     # ET_DIF (mm/day)
     ET_DIF = DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma)
 
-    # TODO: Rename to something more distinct from vapor pressure "ea" variable
-    #   Maybe "ET_PEN", "ET_AERO", "ET_PENMAN"?
     # Penman aerodynamic term
-    Ea = aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, esat, ea)
+    ET_Aero = aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, esat, ea)
 
-    return ET_DIF.add(Ea).rename("ET")
+    return ET_DIF.add(ET_Aero).rename("ET")
 
 
 def transmissivities(lai):
@@ -685,7 +683,7 @@ def aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, esat, ea):
             "gamma": gamma, "delta": delta, "u2": u2, "esat": esat, "ea":  ea,
             "del_water": del_water, "del_LC": del_LC
         }
-    ).rename("Ea")
+    ).rename("ET_Aero")
 
 
 def Rld_atm_ASCE(emissivity, fcd, ea, t_avg):

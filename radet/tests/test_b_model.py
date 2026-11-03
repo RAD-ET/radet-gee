@@ -524,9 +524,13 @@ def test_mu_soil_b(AEs, AEsi, RHs, delta, gamma, mu_s):
 )
 def test_DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma, expected):
     output = utils.constant_image_value(model.DIF_model(
-        Rnc=ee.Image.constant(Rnc), AEs=ee.Image.constant(AEs), RHs=ee.Image.constant(RHs),
-        mu_c=ee.Image.constant(mu_c), mu_s=ee.Image.constant(mu_s),
-        delta=ee.Image.constant(delta), gamma=ee.Image.constant(gamma)
+        Rnc=ee.Image.constant(Rnc),
+        AEs=ee.Image.constant(AEs),
+        RHs=ee.Image.constant(RHs),
+        mu_c=ee.Image.constant(mu_c),
+        mu_s=ee.Image.constant(mu_s),
+        delta=ee.Image.constant(delta),
+        gamma=ee.Image.constant(gamma)
     ))
     # print('\n{:6.4f}'.format(output['ET_DIF']))
     assert abs(output['ET_DIF'] - expected) <= 0.0001
@@ -551,8 +555,8 @@ def test_aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, ea, esat,
     output = utils.constant_image_value(
         model.aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, esat, ea)
     )
-    # print('\n{:6.4f}'.format(output['Ea']))
-    assert abs(output['Ea'] - expected) <= 0.1
+    # print('\n{:6.4f}'.format(output['ET_Aero']))
+    assert abs(output['ET_Aero'] - expected) <= 0.1
 
 
 @pytest.mark.parametrize(
