@@ -358,8 +358,6 @@ class Image:
 
         # Apply the ocean mask
         if mask_ocean_flag:
-            # TODO: Consider renaming this variable (and function) to "ocean_mask"
-            #   since the two supported products are not general water masks
             input_image = input_image.updateMask(landsat.water_mask(product="GLO").Not())
 
         input_image = input_image.set(

@@ -253,59 +253,6 @@ def albedo_l89(landsat_image):
     ).rename("albedo")
 
 
-def cloud_mask_sr_l457(landsat_image):
-    """Cloud mask (Landsat 4/5/7)
-
-    Parameters
-    ----------
-    landsat_image : ee.Image
-        Landsat image with standardized band names.
-
-    Returns
-    -------
-    ee.Image
-
-    Notes
-    -----
-    clear sky value = 66  (01000010)
-    water value = 68   (01000100)
-
-    """
-    quality = landsat_image.select("pixel_qa")
-    c01 = quality.eq(66)  # Clear (01000010)
-    c02 = quality.eq(68)  # Water (01000100)
-    mask = c01.Or(c02)
-
-    return mask
-
-
-def cloud_mask_sr_l8(landsat_image):
-    """Cloud mask (Landsat 8)
-
-    Parameters
-    ----------
-    landsat_image : ee.Image
-        Landsat image with standardized band names.
-
-    Returns
-    -------
-    ee.Image
-
-    Notes
-    -----
-    clear sky value = 322  (00101000010)
-    water value = 324   (00101000100)
-
-    """
-    quality = landsat_image.select("pixel_qa")
-    c01 = quality.eq(322)
-    c02 = quality.eq(324)
-    c03 = quality.eq(1346)  # (10101000010)
-    mask = c01.Or(c02).Or(c03)
-
-    return mask
-
-
 def cloud_mask_C2_l457(landsat_image):
     """Cloud mask (Landsat 4/5/7)
 
@@ -358,6 +305,8 @@ def cloud_mask_C2_l89(landsat_image):
     return mask
 
 
+# TODO: Consider renaming this function to "ocean_mask"
+#   since the two supported products are not general water masks
 def water_mask(product="GLO"):
     """Water mask for precomputing
 
