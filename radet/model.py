@@ -355,7 +355,9 @@ def canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, delta, gamma):
     fc : ee.Image
         Fraction of net radiation absorbed by the canopy.
     mu_c : ee.Image
+        Nondimensional canopy parameter quantifying land-atmosphere coupling.
     mu_s : ee.Image
+        Nondimensional soil parameter quantifying land-atmosphere coupling.    
     RHs : ee.Image
         Soil surface relative humidity.
     delta : ee.Image
@@ -440,6 +442,7 @@ def RHs_model(ea, esat, delta, LST_soil, t_avg, mu_s, water):
     t_avg : ee.Image
         Average air temperature [K].
     mu_s : ee.Image
+        Nondimensional soil parameter quantifying land-atmosphere coupling.
     water : ee.Image
         Water mask with water pixels assigned a value of 1.
 
@@ -565,7 +568,7 @@ def isothermal_soil_available_energy(AEs, emissivity, t_avg, LST_soil):
 
 
 def mu_canopy(Rnc, Rnci, delta, gamma):
-    """
+    """Nondimensional canopy parameter quantifying land-atmosphere coupling
 
     Parameters
     ----------
@@ -594,7 +597,7 @@ def mu_canopy(Rnc, Rnci, delta, gamma):
 
 
 def mu_soil(AEs, AEsi, RHs, delta, gamma):
-    """
+    """Nondimensional soil parameter quantifying land-atmosphere coupling
 
     Parameters
     ----------
@@ -625,7 +628,7 @@ def mu_soil(AEs, AEsi, RHs, delta, gamma):
 
 
 def DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma):
-    """
+    """Daily ET under diffusivity independent flux (DIF) assumption
 
     Parameters
     ----------
@@ -636,7 +639,9 @@ def DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma):
     RHs : ee.Image
         Soil surface relative humidity.
     mu_c : ee.Image
+        Nondimensional canopy parameter quantifying land-atmosphere coupling.
     mu_s : ee.Image
+        Nondimensional soil parameter quantifying land-atmosphere coupling.
     delta : ee.Image
         Slope of vapor pressure curve.
     gamma : ee.Image
@@ -657,11 +662,12 @@ def DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma):
 
 
 def aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, esat, ea):
-    """
+    """Aerodynamic enhancement of daily ET for conditions/regions conducive to advection
 
     Parameters
     ----------
     del_LC : ee.Image
+        Nondimensional parameter representing a land cover modulation of aerodynamic enhancement.
     fc : ee.Image
         Fraction of net radiation absorbed by the canopy.
     LST_soil : ee.Image
@@ -728,7 +734,7 @@ def Rld_atm_ASCE(emissivity, fcd, ea, t_avg):
 
 
 def add_lapse_correction(ta, elev, elev_coarse):
-    """
+    """Lapse adjust/correct coarse resolution air temperature
 
     Parameters
     ----------
