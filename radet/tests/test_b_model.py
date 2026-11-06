@@ -52,25 +52,43 @@ def test_transmissivities(lai, fc, tauS, tauL, tol=0.0001):
 
 
 @pytest.mark.parametrize(
-    'landcover, lai, wet, water',
+    'landcover, lai, expected',
     [
-        [11, 0, 1, 1],
-        [81, 0, 1, 0],
-        [82, 0, 1, 0],
-        [95, 0, 1, 0],
-        [90, 0, 1, 0],
-        [90, 0.9, 1, 0],
-        [90, 1.0, 0, 0],
-        [71, 0, 0, 0],
-        [71, 4, 0, 0],
+        [11, 0, 1],
+        [81, 0, 1],
+        [82, 0, 1],
+        [95, 0, 1],
+        [90, 0, 1],
+        [90, 0.9, 1],
+        [90, 1.0, 0],
+        [71, 0, 0],
+        [71, 4, 0],
     ]
 )
-def test_wet_mask(landcover, lai, wet, water):
-    output = utils.constant_image_value(model.wet_mask(
-        landcover=ee.Image.constant(landcover), lai=ee.Image.constant(lai)
+def test_aerodynamic_mask(landcover, lai, expected):
+    output = utils.constant_image_value(model.aerodynamic_mask(
+        landcover=ee.Image.constant(landcover), lai=ee.Image.constant(lai),
+        aero_classes=[11, 81, 82, 95], aero_lai_classes=[90]
     ))
-    assert output['remapped'] == wet
-    assert output['remapped_1'] == water
+    assert output['aero_mask'] == expected
+
+
+@pytest.mark.parametrize(
+    'landcover, expected',
+    [
+        [11, 1],
+        [81, 0],
+        [82, 0],
+        [95, 0],
+        [90, 0],
+        [71, 0],
+    ]
+)
+def test_water_mask(landcover, expected):
+    output = utils.constant_image_value(model.water_mask(
+        landcover=ee.Image.constant(landcover), water_classes=[11]
+    ))
+    assert output['water_mask'] == expected
 
 
 @pytest.mark.parametrize(
@@ -222,7 +240,7 @@ def test_daily_avg_lst(tminK, lst, sunrise_ts, t_avg, expected):
 ################################################################################
 
 @pytest.mark.parametrize(
-    'ea, esat, delta, LST_soil, t_avg, mu_s, water, RHs',
+    'ea, esat, delta, LST_soil, t_avg, mu_s, lc_water_mask, RHs',
     [
         # First run, mu_s=1, set RHs to RH (ea/esat)
         [1.5156, 3.7470, 0.2184, 300.0, 301, 1, 0, 0.4045],
@@ -232,8 +250,10 @@ def test_daily_avg_lst(tminK, lst, sunrise_ts, t_avg, expected):
         [1.5156, 3.7470, 0.2184, 310.0, 301, 1, 1, 1],
     ]
 )
-def test_RHs_model_a(ea, esat, delta, LST_soil, t_avg, mu_s, water, RHs):
-    output = utils.constant_image_value(model.RHs_model(ea, esat, delta, LST_soil, t_avg, mu_s, water))
+def test_RHs_model_a(ea, esat, delta, LST_soil, t_avg, mu_s, lc_water_mask, RHs):
+    output = utils.constant_image_value(
+        model.RHs_model(ea, esat, delta, LST_soil, t_avg, mu_s, lc_water_mask)
+    )
     # print('\n{:6.4f}'.format(output['RHs']))
     assert abs(output['RHs'] - RHs) <= 0.0001
 
@@ -371,7 +391,7 @@ def test_mu_soil_a(AEs, AEsi, RHs, delta, gamma, mu_s):
 ################################################################################
 
 @pytest.mark.parametrize(
-    'ea, esat, delta, LST_soil, t_avg, mu_s, water, RHs',
+    'ea, esat, delta, LST_soil, t_avg, mu_s, lc_water_mask, RHs',
     [
         [1.5156, 3.7470, 0.2184, 311.47, 301, 2.7487, 0, 0.2914],
         [1.5156, 3.7470, 0.2184, 312.05, 301, 3.2465, 0, 0.2798],
@@ -379,8 +399,10 @@ def test_mu_soil_a(AEs, AEsi, RHs, delta, gamma, mu_s):
         [1.5156, 3.7470, 0.2184, 301.00, 301, 1.0000, 0, 0.4045],
     ]
 )
-def test_RHs_model_b(ea, esat, delta, LST_soil, t_avg, mu_s, water, RHs):
-    output = utils.constant_image_value(model.RHs_model(ea, esat, delta, LST_soil, t_avg, mu_s, water))
+def test_RHs_model_b(ea, esat, delta, LST_soil, t_avg, mu_s, lc_water_mask, RHs):
+    output = utils.constant_image_value(
+        model.RHs_model(ea, esat, delta, LST_soil, t_avg, mu_s, lc_water_mask)
+    )
     # print('\n{:6.4f}'.format(output['RHs']))
     assert abs(output['RHs'] - RHs) <= 0.0001
 
@@ -537,7 +559,7 @@ def test_DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma, expected):
 
 
 @pytest.mark.parametrize(
-    'del_LC, fc, LST_soil, RHs, delta, gamma, u2, ea, esat, expected',
+    'lc_aero_mask, fc, LST_soil, RHs, delta, gamma, u2, ea, esat, expected',
     [
         # Non-wet landcover
         [0, 0.0392, 311.50, 0.2914, 0.2184, 0.0673, 1.3463, 1.5156, 3.7470, 0.0],
@@ -551,52 +573,54 @@ def test_DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma, expected):
         [1, 0.7534, 301.00, 0.4045, 0.2184, 0.0673, 1.3463, 1.5156, 3.7470, 1.8554],
     ]
 )
-def test_aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, ea, esat, expected):
+def test_aerodynamic_term(lc_aero_mask, fc, LST_soil, RHs, delta, gamma, u2, ea, esat, expected):
     output = utils.constant_image_value(
-        model.aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, esat, ea)
+        model.aerodynamic_term(lc_aero_mask, fc, LST_soil, RHs, delta, gamma, u2, esat, ea)
     )
     # print('\n{:6.4f}'.format(output['ET_Aero']))
     assert abs(output['ET_Aero'] - expected) <= 0.1
 
 
 @pytest.mark.parametrize(
-    'lai, lst, albedo, emissivity, landcover, elevation, tmin, tmax, qa, u10, srad, meteo_elev, time_start, lat, lon, expected',
+    'lai, lst, albedo, emis, elev, lc_aero, lc_water, tmin, tmax, qa, u10, srad, meteo_elev, time, lat, lon, expected',
     [
-        # Non-agricultural landcover
-        [0.1, 327, 0.18, 0.98, 71, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 1.3970],
-        [0.5, 323, 0.19, 0.97, 71, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 2.3718],
-        [2.0, 313, 0.19, 0.97, 71, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 4.6267],
-        [3.5, 304, 0.15, 0.97, 71, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 5.8588],
-        # Agricultural landcover (to trigger aerodynamic adjustment)
-        [0.1, 327, 0.18, 0.98, 81, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 1.4958],
-        [0.5, 323, 0.19, 0.97, 81, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 2.8026],
-        [2.0, 313, 0.19, 0.97, 81, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 5.9374],
-        [3.5, 304, 0.15, 0.97, 81, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 7.7139],
-        # Check with NLCD=90 since it is LAI dependent and should switch from wet to non-wet values
-        [0.1, 327, 0.18, 0.98, 90, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 1.4958],
-        [0.5, 323, 0.19, 0.97, 90, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 2.8026],
-        [2.0, 313, 0.19, 0.97, 90, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 4.6267],
-        [3.5, 304, 0.15, 0.97, 90, 10, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 5.8588],
+        # Non-agricultural landcover (no aerodynamic enhancement)
+        [0.1, 327, 0.18, 0.98, 10, 0, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 1.3970],
+        [0.5, 323, 0.19, 0.97, 10, 0, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 2.3718],
+        [2.0, 313, 0.19, 0.97, 10, 0, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 4.6267],
+        [3.5, 304, 0.15, 0.97, 10, 0, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 5.8588],
+        # Agricultural landcover (to trigger aerodynamic enhancement)
+        [0.1, 327, 0.18, 0.98, 10, 1, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 1.4958],
+        [0.5, 323, 0.19, 0.97, 10, 1, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 2.8026],
+        [2.0, 313, 0.19, 0.97, 10, 1, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 5.9374],
+        [3.5, 304, 0.15, 0.97, 10, 1, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 7.7139],
+        # Mimic NLCD=90 with switch in aero mask based on LAI
+        [0.1, 327, 0.18, 0.98, 10, 1, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 1.4958],
+        [0.5, 323, 0.19, 0.97, 10, 1, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 2.8026],
+        [2.0, 313, 0.19, 0.97, 10, 0, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 4.6267],
+        [3.5, 304, 0.15, 0.97, 10, 0, 0, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 5.8588],
+        # Water landcover
+        [0.0, 327, 0.001, 0.99, 10, 1, 1, 289.6, 312.4, 0.00937, 1.8, 353.7, 10, SCENE_TIME, 38.905, -121.668, 5.4029],
     ]
 )
 def test_et(
-        lai, lst, albedo, emissivity, landcover, elevation,
-        tmin, tmax, qa, u10, srad, meteo_elev, time_start, lat, lon, expected
+        lai, lst, albedo, emis, elev, lc_aero, lc_water, tmin, tmax, qa, u10, srad, meteo_elev, time, lat, lon, expected
 ):
     output = utils.constant_image_value(model.et(
         lai=ee.Image(lai),
         lst=ee.Image(lst),
         albedo=ee.Image(albedo),
-        emissivity=ee.Image(emissivity),
-        landcover=ee.Image(landcover),
-        elevation=ee.Image(elevation),
+        emissivity=ee.Image(emis),
+        elevation=ee.Image(elev),
+        lc_aero_mask=lc_aero,
+        lc_water_mask=lc_water,
         tmin=ee.Image(tmin),
         tmax=ee.Image(tmax),
         qa=ee.Image(qa),
         u10=ee.Image(u10),
         srad=ee.Image(srad),
         meteo_elevation=ee.Image(meteo_elev),
-        time_start=time_start,
+        time_start=time,
         latitude=ee.Image(lat),
         longitude=ee.Image(lon),
     ))

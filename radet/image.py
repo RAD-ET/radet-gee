@@ -79,6 +79,13 @@ class Image:
             et_reference_resample : {"nearest", "bilinear", "bicubic", None}
                 Reference ET resampling.  The default is None which is
                 equivalent to nearest neighbor resampling.
+            lc_aero_classes : list
+                Landcover class values where aerodynamic enhancement should be applied.
+            lc_aero_lai_classes : list
+                Landcover class values where aerodynamic enhancement should be
+                applied only for low LAI conditions.
+            lc_water_classes : list
+                Water landcover class values for setting soil surface relative humidity.
             latitude : ee.Image, ee.Number, float, optional
                 Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
             longitude : ee.Image, ee.Number, float, optional
@@ -414,8 +421,9 @@ class Image:
             emissivity=self.emissivity,
             lai=self.lai,
             lst=self.lst,
-            landcover=self.landcover,
             elevation=self.elevation,
+            lc_aero_mask=self.lc_aero_mask,
+            lc_water_mask=self.lc_water_mask,
             tmin=self.tmin,
             tmax=self.tmax,
             qa=self.qa,
@@ -560,21 +568,20 @@ class Image:
 
         return elev_img.select([0], ["elevation"])
 
+    # TODO: Consider moving to a separate landcover module
     @lazy_property
     def landcover(self):
         """Landcover"""
         if utils.is_number(self.landcover_source):
             lc_img = ee.Image.constant(int(self.landcover_source))
         elif isinstance(self.landcover_source, ee.computedobject.ComputedObject):
-            # If the source is an ee.Image object assume it is an NLCD image
             lc_img = ee.Image(self.landcover_source)
         elif re.match("projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER/Annual_NLCD_LndCov_\\d{4}_CU_\\w+",
                       self.landcover_source, re.I):
             # Check if the source is similar to an awesome GEE catalog annual NLCD image ID
             lc_img = ee.Image(self.landcover_source)
         elif self.landcover_source == "projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER":
-            # Check if the source is similar to an awesome GEE catalog annual NLCD collection ID
-            # Select the closest image in time to the target Landsat image
+            # For the annual NLCD collection, select the closest image in time to the target image
             lc_coll = ee.ImageCollection(self.landcover_source)
             lc_year = (
                 ee.Number(self.year)
@@ -585,10 +592,86 @@ class Image:
                 lc_coll.filter(ee.Filter.calendarRange(lc_year, lc_year, "year")).first()
                 .set({'landcover_year': lc_year})
             )
+        elif self.landcover_source == 'USGS/NLCD_RELEASES/2020_REL/NALCMS':
+            lc_img = ee.Image(self.landcover_source)
+        elif self.landcover_source in ["ESA/WorldCover/v100/2020", "ESA/WorldCover/v200/2021"]:
+            lc_img = ee.Image(self.landcover_source)
         else:
-            raise ValueError(f"Unsupported landcover_source: {self.landcover_source}\n")
+            # Assume any other landcover source value is an image
+            lc_img = ee.Image(self.landcover_source).select([0], ["landcover"])
+            # # We may need to allow the user to select a custom band
+            # lc_img = ee.Image(self.landcover_source).select([landcover_band], ["landcover"])
 
         return lc_img.rename(["landcover"])
+
+    # TODO: Consider moving to a separate landcover module
+    @lazy_property
+    def lc_classes(self):
+        aero_classes = None
+        aero_lai_classes = None
+        water_classes = None
+
+        # Start with landcover classes for known landcover sources
+        if utils.is_number(self.landcover_source):
+            pass
+        elif isinstance(self.landcover_source, ee.computedobject.ComputedObject):
+            pass
+        elif self.landcover_source.startswith("projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER"):
+            aero_classes = [11, 81, 82, 95]
+            aero_lai_classes = [90]
+            water_classes = [11]
+        elif self.landcover_source == 'USGS/NLCD_RELEASES/2020_REL/NALCMS':
+            # NALCMS provides coverage for Mexico, USA, and Canada
+            aero_classes = [18, 15]
+            aero_lai_classes = [14]  # Wetland
+            water_classes = [18]
+        elif self.landcover_source in ["ESA/WorldCover/v100/2020", "ESA/WorldCover/v200/2021"]:
+            aero_classes = [80, 40]
+            aero_lai_classes = [90]  # Herbaceous wetland
+            water_classes = [80]
+        # elif self.landcover_source.startswith("USGS/NLCD_RELEASES/"):
+        #     aero_classes = [11, 81, 82, 95]
+        #     aero_lai_classes = [90]
+        #     water_classes = [11]
+
+        # Override the landcover class values if they were set in the keyword args
+        # Note, this will allow the variables to be set to empty lists
+        if ("lc_aero_classes" in self.init_kwargs.keys()
+                and self.init_kwargs["lc_aero_classes"] is not None):
+            aero_classes = self.init_kwargs["lc_aero_classes"]
+        if ("lc_aero_lai_classes" in self.init_kwargs.keys()
+                and self.init_kwargs["lc_aero_lai_classes"] is not None):
+            aero_lai_classes = self.init_kwargs["lc_aero_lai_classes"]
+        if ("lc_water_classes" in self.init_kwargs.keys()
+                and self.init_kwargs["lc_water_classes"] is not None):
+            water_classes = self.init_kwargs["lc_water_classes"]
+
+        # Check that landcover class lists were set to something other than None
+        #   (since empty class lists are valid)
+        if aero_classes is None:
+            raise ValueError("lc_aero_classes parameter must be set for custom landcover sources")
+        if water_classes is None:
+            raise ValueError("lc_water_classes parameter must be set for custom landcover sources")
+
+        return {'aero': aero_classes, 'aero_lai': aero_lai_classes, 'water': water_classes}
+
+    @lazy_property
+    def lc_aero_mask(self):
+        if self.lc_classes['aero']:
+            return model.aerodynamic_mask(
+                landcover=self.landcover, lai=self.lai,
+                aero_classes=self.lc_classes['aero'],
+                aero_lai_classes=self.lc_classes['aero_lai']
+            )
+        else:
+            return self.landcover.multiply(0).rename("aero_mask")
+
+    @lazy_property
+    def lc_water_mask(self):
+        if self.lc_classes['water']:
+            return model.water_mask(landcover=self.landcover, water_classes=self.lc_classes['water'])
+        else:
+            return self.landcover.multiply(0).rename("water_mask")
 
     @lazy_property
     def latitude(self):
@@ -625,7 +708,7 @@ class Image:
         This function is needed for the collection interpolation
 
         """
-        # CGM - Had to switch to building the mask from ndvi to get the tests to pass
+        # CGM - Had to switch to building the mask from lai to get the tests to pass
         #   and it may be okay to do this if no additional masking is applied within
         #   the model.et() function
         return self.lai.multiply(0).add(1).updateMask(1).uint8().rename(["mask"]).set(self.properties)
