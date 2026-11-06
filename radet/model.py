@@ -552,7 +552,7 @@ def isothermal_soil_available_energy(AEs, emissivity, t_avg, LST_soil):
 
 
 def mu_canopy(Rnc, Rnci, delta, gamma):
-    """
+    """Nondimensional canopy parameter quantifying land-atmosphere coupling
 
     Parameters
     ----------
@@ -581,7 +581,7 @@ def mu_canopy(Rnc, Rnci, delta, gamma):
 
 
 def mu_soil(AEs, AEsi, RHs, delta, gamma):
-    """
+    """Nondimensional soil parameter quantifying land-atmosphere coupling
 
     Parameters
     ----------
@@ -612,7 +612,7 @@ def mu_soil(AEs, AEsi, RHs, delta, gamma):
 
 
 def DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma):
-    """
+    """Daily ET under diffusivity independent flux (DIF) assumption
 
     Parameters
     ----------
@@ -646,7 +646,7 @@ def DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma):
 
 
 def aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, esat, ea):
-    """
+    """Aerodynamic enhancement of daily ET for conditions/regions conducive to advection
 
     Parameters
     ----------
@@ -718,7 +718,7 @@ def Rld_atm_ASCE(emissivity, fcd, ea, t_avg):
 
 
 def add_lapse_correction(ta, elev, elev_coarse):
-    """
+    """Lapse adjust/correct coarse resolution air temperature
 
     Parameters
     ----------
