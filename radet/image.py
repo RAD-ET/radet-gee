@@ -223,6 +223,12 @@ class Image:
             keyword arguments to pass through to cloud mask function
         kwargs : dict
             Keyword arguments to pass through to Image init function
+            c2_lst_correct : boolean, optional
+                Apply the Landsat Collection 2 LST emissivity correction.
+            c2_emissivity_correct : boolean, optional
+                Apply the Landsat Collection 2 emissivity correction.
+            lst_source : str, optional
+                If lst_source is set, force c2_lst_correct to be False
 
         Returns
         -------
@@ -240,6 +246,7 @@ class Image:
         #   If the plan long term is to use the DisALEXI albedo calculation
         #   then we could remove the ultra_blue band and simplify this section
         #   to a single set of band names and coefficients
+        # We could also process the LST band separately, similar to SSEBop
         input_bands = ee.Dictionary(
             {
                 "LANDSAT_4": ["SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B7", "ST_B6", "QA_PIXEL", "ST_EMIS"],
@@ -296,7 +303,7 @@ class Image:
         )
 
         # YK - RADET used Disalexi albedo 
-        albedo = landsat.albedo_disalexi(prep_image)
+        albedo_image = landsat.albedo_disalexi(prep_image)
         
         cloud_mask = ee.Algorithms.If(
             ee.List(["LANDSAT_8", "LANDSAT_9"]).contains(spacecraft_id),
@@ -316,8 +323,10 @@ class Image:
         #     cloudmask_args["snow_flag"] = True
         # cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(sr_image, **cloudmask_args)
 
-        # Check if passing c2_lst_correct arguments
-        if "c2_lst_correct" in kwargs.keys():
+        if ('lst_source' in kwargs.keys()) and kwargs['lst_source']:
+            # Force the LST correction flag to False if the LST source parameter is set
+            c2_lst_correct = False
+        elif "c2_lst_correct" in kwargs.keys():
             assert isinstance(kwargs["c2_lst_correct"], bool), "selection type must be a boolean"
             # Remove from kwargs since it is not a valid argument for Image init
             c2_lst_correct = kwargs.pop("c2_lst_correct")
@@ -325,9 +334,16 @@ class Image:
             c2_lst_correct = cls._C2_LST_CORRECT
 
         if c2_lst_correct:
-            lst = openet.core.common.landsat_c2_sr_lst_correct(sr_image)
+            lst_image = openet.core.common.landsat_c2_sr_lst_correct(sr_image)
+        elif ('lst_source' in kwargs.keys()) and kwargs['lst_source']:
+            # Use an LST image from a separate LST source collection
+            # Leaving param in kwargs for now so it will be written as an output property
+            # Can't use the LST band as the mask since it may have emissivity holes
+            lst_image = landsat.lst_source_image(
+                lst_source=kwargs['lst_source'], mask_image=sr_image.select(['SR_B3'])
+            )
         else:
-            lst = prep_image.select(["lst"])
+            lst_image = prep_image.select(["lst"])
 
         # Check if passing c2_emissivity_correct arguments
         if "c2_emissivity_correct" in kwargs.keys():
@@ -338,17 +354,17 @@ class Image:
             c2_emissivity_correct = cls._C2_EMISSIVITY_CORRECT
 
         if c2_emissivity_correct:
-            emissivity = openet.core.common.landsat_c2_sr_emissivity_correct(sr_image)
+            emissivity_image = openet.core.common.landsat_c2_sr_emissivity_correct(sr_image)
         else:
-            emissivity = prep_image.select(["ASTER_GED_emissivity"], ["emissivity"])
+            emissivity_image = prep_image.select(["ASTER_GED_emissivity"], ["emissivity"])
 
         # Build the input image from the components
         input_image = ee.Image(
             [
-                albedo,
-                emissivity,
+                albedo_image,
+                emissivity_image,
                 landsat.lai(prep_image),
-                lst.rename(["lst"]),
+                lst_image,
                 landsat.ndvi(prep_image),
                 landsat.ndwi(prep_image),
             ]
