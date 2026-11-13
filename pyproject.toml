@@ -8,10 +8,10 @@ description = "Earth Engine implementation of the RADET model"
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = ["RADET", "OpenET", "Earth Engine", "Evapotranspiration", "Landsat"]
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 dependencies = [

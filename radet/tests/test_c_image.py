@@ -780,6 +780,25 @@ def test_Image_from_landsat_c2_sr_c2_lst_correct_fill():
     assert corrected['lst'] > 0
 
 
+def test_Image_from_landsat_c2_sr_lst_source_arg():
+    """Test if the lst_source parameter can be set (not if it works)"""
+    image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_031035_20160702'
+    output = model.Image.from_landsat_c2_sr(
+        image_id, lst_source='projects/openet/assets/lst/landsat/c02')
+    assert type(output) == type(default_image_obj())
+
+
+def test_Image_from_landsat_c2_sr_lst_source_values():
+    """Test if the lst_source image can be read"""
+    image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_031035_20160702'
+    xy = (-102.4, 36.1)
+    lst_source = 'projects/openet/assets/lst/landsat/c02'
+    output_img = model.Image.from_landsat_c2_sr(image_id, lst_source=lst_source).lst
+    output = utils.point_image_value(output_img, xy)
+    assert abs(output['lst'] - 322.8) <= 0.1
+    # assert output_img.get('lst_source_id').getInfo().startswith(lst_source)
+
+
 @pytest.mark.parametrize(
     'image_id',
     [
