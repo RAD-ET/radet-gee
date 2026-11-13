@@ -327,6 +327,22 @@ def test_water_mask(product, xy, expected):
     assert output['water_mask'] == expected
 
 
-def test_Image_meteorology_source_sources_exception():
+def test_water_mask_product_exception():
     with pytest.raises(ValueError):
         utils.getinfo(landsat.water_mask(product=''))
+
+
+@pytest.mark.parametrize(
+    'lst_source, image_id, expected',
+    [
+        ['projects/openet/assets/lst/landsat/c02', 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716', 1],
+    ]
+)
+def test_lst_source_image(lst_source, image_id, expected):
+    output_img = landsat.lst_source_image(
+        lst_source=lst_source,
+        mask_image=ee.Image(image_id).select(['SR_B3'])
+    )
+    output_info = utils.getinfo(output_img)
+    assert output_info['properties']['system:index'] == image_id.split('/')[-1]
+    assert output_info['properties']['lst_source_id'] == f'{lst_source}/{image_id.split("/")[-1].lower()}'
