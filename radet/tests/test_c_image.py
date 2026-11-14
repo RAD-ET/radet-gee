@@ -432,6 +432,9 @@ def test_Image_lc_water_mask_default_classes(source, xy, expected):
         ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', [81, 82], TEST_POINT, 1],
         # Check that an empty class list will run (and default to 0)
         ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', [], TEST_POINT, 0],
+        # Check is classes can be set as a comma separated string of ints
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', '81,82', TEST_POINT, 1],
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', '82', TEST_POINT, 1],
     ]
 )
 def test_Image_lc_water_mask_custom_classes(source, water_classes, xy, expected):
@@ -477,6 +480,9 @@ def test_Image_lc_aero_mask_default_classes(source, xy, expected):
         ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', [71], TEST_POINT, 0],
         # Check that an empty class list will run (and default to 0)
         ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', [], TEST_POINT, 0],
+        # Check is classes can be set as a comma separated string of ints
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', '71,72', TEST_POINT, 0],
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', '71', TEST_POINT, 0],
     ]
 )
 def test_Image_lc_aero_mask_custom_classes(source, aero_classes, xy, expected):

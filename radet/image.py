@@ -79,12 +79,12 @@ class Image:
             et_reference_resample : {"nearest", "bilinear", "bicubic", None}
                 Reference ET resampling.  The default is None which is
                 equivalent to nearest neighbor resampling.
-            lc_aero_classes : list
+            lc_aero_classes : list, str
                 Landcover class values where aerodynamic enhancement should be applied.
-            lc_aero_lai_classes : list
+            lc_aero_lai_classes : list, str
                 Landcover class values where aerodynamic enhancement should be
                 applied only for low LAI conditions.
-            lc_water_classes : list
+            lc_water_classes : list, str
                 Water landcover class values for setting soil surface relative humidity.
             latitude : ee.Image, ee.Number, float, optional
                 Latitude [deg].  If not set will default to ee.Image.pixelLonLat().
@@ -461,7 +461,7 @@ class Image:
             # CGM - Should we use the ee_types here instead?
             #   i.e. ee.ee_types.isNumber(self.et_reference_source)
             et_reference_img = ee.Image.constant(self.et_reference_source)
-        elif type(self.et_reference_source) is str:
+        elif isinstance(self.et_reference_source, str):
             # Assume a string source is an image collection ID (not an image ID)
             et_reference_coll = (
                 ee.ImageCollection(self.et_reference_source)
@@ -577,7 +577,7 @@ class Image:
             elev_img = ee.Image.constant(float(self.elevation_source))
         elif isinstance(self.elevation_source, ee.computedobject.ComputedObject):
             elev_img = self.elevation_source
-        elif type(self.elevation_source) is str:
+        elif isinstance(self.elevation_source, str):
             elev_img = ee.Image(self.elevation_source)
         else:
             raise ValueError(f"Unsupported elevation_source: {self.elevation_source}\n")
@@ -661,6 +661,14 @@ class Image:
         if ("lc_water_classes" in self.init_kwargs.keys()
                 and self.init_kwargs["lc_water_classes"] is not None):
             water_classes = self.init_kwargs["lc_water_classes"]
+
+        # Assume string inputs are comma separated integers and convert to lists
+        if isinstance(aero_classes, str):
+            aero_classes = [int(c.strip()) for c in aero_classes.split(",") if c.strip()]
+        if isinstance(aero_lai_classes, str):
+            aero_lai_classes = [int(c.strip()) for c in aero_lai_classes.split(",") if c.strip()]
+        if isinstance(water_classes, str):
+            water_classes = [int(c.strip()) for c in water_classes.split(",") if c.strip()]
 
         # Check that landcover class lists were set to something other than None
         #   (since empty class lists are valid)
