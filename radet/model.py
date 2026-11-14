@@ -11,8 +11,9 @@ def et(
     lst,
     albedo,
     emissivity,
-    landcover,
     elevation,
+    lc_aero_mask,
+    lc_water_mask,
     tmin,
     tmax,
     qa,
@@ -35,10 +36,12 @@ def et(
         Surface albedo.
     emissivity : ee.Image
         Broad-band surface emissivity.
-    landcover : ee.Image
-        Landcover image with NLCD classes.
     elevation : ee.Image
         Elevation [m].
+    lc_aero_mask : ee.Image
+        Mask of landcover classes where aerodynamic enhancement should be applied.
+    lc_water_mask : ee.Image
+        Mask of water landcover classes for setting soil surface relative humidity.
     tmin : ee.Image
         Minimum daily air temperature [K].
     tmax : ee.Image
@@ -108,8 +111,6 @@ def et(
     # Saturation vapor pressure (kPa)
     esat = ee.Image().expression("0.6108 * exp(17.27 * (t - 273.15) / ((t - 273.15) + 237.3))", {"t": t_avg})
 
-    # TODO: Rename "delta" variables in other functions to "declination",
-    #   then rename this variable to lower case "delta"
     # Slope of the saturation vapor pressure curve
     delta = ee.Image().expression(
         "2503 * exp(17.27 * (t - 273.15) / ((t - 273.15) + 237.3)) / ((t - 273.15) + 237.3) ** 2",
@@ -129,9 +130,6 @@ def et(
     #########################################
     # Other variables independent to mu terms
     #########################################
-
-    # Land cover mask
-    del_LC, water = wet_mask(landcover, lai)
 
     # Transmissivity
     tauL, tauS, fc = transmissivities(lai)
@@ -172,7 +170,7 @@ def et(
     ###########################
 
     # Soil surface relative humidity
-    RHs = RHs_model(ea, esat, delta, LST_soil, t_avg, mu_s, water)
+    RHs = RHs_model(ea, esat, delta, LST_soil, t_avg, mu_s, lc_water_mask)
     
     # Soil and canopy LST
     LST_canopy = canopy_LST(LST_avg, t_avg, fc, mu_c, mu_s, RHs, delta, gamma)
@@ -197,7 +195,7 @@ def et(
     ET_DIF = DIF_model(Rnc, AEs, RHs, mu_c, mu_s, delta, gamma)
 
     # Penman aerodynamic term
-    ET_Aero = aerodynamic_term(del_LC, fc, LST_soil, RHs, delta, gamma, u2, esat, ea)
+    ET_Aero = aerodynamic_term(lc_aero_mask, fc, LST_soil, RHs, delta, gamma, u2, esat, ea)
 
     return ET_DIF.add(ET_Aero).rename("ET")
 
@@ -220,15 +218,30 @@ def transmissivities(lai):
     tauL = lai.expression("exp(-0.95 * lai)", {"lai": lai}).clamp(0.01, 1).rename("tauL")
     tauS = lai.expression("exp(-0.56 * lai)", {"lai": lai}).clamp(0.01, 1).rename("tauS")
     fc = lai.expression("1 - exp(-0.4 * lai)", {"lai": lai}).clamp(0.01, 1).rename("fc")
-    
+
     return tauL, tauS, fc
 
 
-# TODO: Add support for passing in remap lists, or remap the values in image.py
-# TODO: Split into two separate functions
-# TODO: Add a better explanation of what the "wet" variable represents
-def wet_mask(landcover, lai):
+def water_mask(landcover, water_classes):
+    """Landcover water mask
+
+    Parameters
+    ----------
+    landcover : ee.Image
+        Landcover image.
+    water_classes : list
+        Water landcover class values.
+
+    Returns
+    -------
+    ee.Image
+
     """
+    return landcover.remap(water_classes, [1] * len(water_classes), 0).eq(1).rename('water_mask')
+
+
+def aerodynamic_mask(landcover, lai, aero_classes, aero_lai_classes):
+    """Mask of landcovers where aerodynamic enhancement should be applied
 
     Parameters
     ----------
@@ -236,22 +249,25 @@ def wet_mask(landcover, lai):
         Landcover image with NLCD classes.
     lai : ee.Image
         Leaf area index.
+    aero_classes : list
+        Landcover class values where aerodynamic enhancement should be applied.
+    aero_lai_classes : list
+        Landcover class values where aerodynamic enhancement should be applied
+        only for low LAI conditions.
 
     Returns
     -------
-    wet : ee.Image
-    water : ee.Image
+    ee.Image
 
     """
-    water = landcover.remap([11], [1], 0).eq(1)
+    aero = landcover.remap(aero_classes, [1] * len(aero_classes), 0).eq(1)
+    if aero_lai_classes:
+        aero = aero.Or(
+            landcover.remap(aero_lai_classes, [1] * len(aero_lai_classes), 0).eq(1)
+            .And(lai.lt(1))
+        )
 
-    # Define wet surfaces
-    wet = landcover.remap([11, 81, 82, 95], [1, 1, 1, 1], 0).eq(1)
-
-    wet_ww = landcover.remap([90], [1], 0).eq(1)
-    wet_ww2 = wet_ww.And(lai.lt(1))
-
-    return wet.Or(wet_ww2), water
+    return aero.rename('aero_mask')
 
 
 def clear_sky_terms(time_start, lat, elev, srad):

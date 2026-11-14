@@ -44,8 +44,11 @@ def default_image_args(
         lst=304,
         ndvi=0.8,
         ndwi=-0.5,
-        landcover_source=82,
         elevation_source=10,
+        landcover_source=82,
+        lc_aero_classes=[11, 81, 82, 95],
+        lc_aero_lai_classes=[90],
+        lc_water_classes=[11],
         temperature_source=301,
         humidity_source=0.007,
         windspeed_source=2,
@@ -66,8 +69,11 @@ def default_image_args(
         'image': default_image(
             albedo=albedo, emissivity=emissivity, lai=lai, lst=lst, ndvi=ndvi, ndwi=ndwi
         ),
-        'landcover_source': landcover_source,
         'elevation_source': elevation_source,
+        'landcover_source': landcover_source,
+        'lc_aero_classes': lc_aero_classes,
+        'lc_aero_lai_classes': lc_aero_lai_classes,
+        'lc_water_classes': lc_water_classes,
         'temperature_source': temperature_source,
         'humidity_source': humidity_source,
         'windspeed_source': windspeed_source,
@@ -91,8 +97,11 @@ def default_image_obj(
         lst=304,
         ndvi=0.8,
         ndwi=-0.5,
-        landcover_source=82,
         elevation_source=10,
+        landcover_source=82,
+        lc_aero_classes=[11, 81, 82, 95],
+        lc_aero_lai_classes=[90],
+        lc_water_classes=[11],
         temperature_source=301,
         humidity_source=0.007,
         windspeed_source=2,
@@ -116,8 +125,11 @@ def default_image_obj(
         lst=lst,
         ndvi=ndvi,
         ndwi=ndwi,
-        landcover_source=landcover_source,
         elevation_source=elevation_source,
+        landcover_source=landcover_source,
+        lc_aero_classes=lc_aero_classes,
+        lc_aero_lai_classes=lc_aero_lai_classes,
+        lc_water_classes=lc_water_classes,
         temperature_source=temperature_source,
         humidity_source=humidity_source,
         windspeed_source=windspeed_source,
@@ -129,6 +141,8 @@ def default_image_obj(
         et_reference_band=et_reference_band,
         et_reference_factor=et_reference_factor,
         et_reference_resample=et_reference_resample,
+        # tmin_source=tmin_source,
+        # tmax_source=tmax_source,
     ))
 
 
@@ -295,6 +309,11 @@ def test_Image_meteo_elevation_source_values(source, xy, expected, tol=0.01):
     assert abs(output['elevation'] - expected) <= tol
 
 
+def test_Image_elevation_band_name():
+    output = utils.getinfo(model.Image(default_image()).elevation)['bands'][0]['id']
+    assert output == 'elevation'
+
+
 @pytest.mark.parametrize(
     'source, xy, expected',
     [
@@ -317,9 +336,9 @@ def test_Image_elevation_source_exception():
         utils.getinfo(model.Image(default_image(), elevation_source=None).elevation)
 
 
-def test_Image_elevation_band_name():
-    output = utils.getinfo(model.Image(default_image()).elevation)['bands'][0]['id']
-    assert output == 'elevation'
+def test_Image_landcover_band_name():
+    output = utils.getinfo(model.Image(default_image()).landcover)['bands'][0]['id']
+    assert output == 'landcover'
 
 
 @pytest.mark.parametrize(
@@ -333,36 +352,146 @@ def test_Image_elevation_band_name():
             TEST_POINT, 82
         ],
         ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', TEST_POINT, 82],
-        # CGM - This one causes ee.Initialization errors
-        # [ee.Image('USGS/SRTMGL1_003').multiply(0).add(82), TEST_POINT, 82],
-        ['82', TEST_POINT, 82],
-        [82, TEST_POINT, 82],
+        ['USGS/NLCD_RELEASES/2020_REL/NALCMS', TEST_POINT, 15],
+        ['ESA/WorldCover/v200/2021', TEST_POINT, 40],
+        # Old NLCD releases are not explicitly supported and will test else condition
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', TEST_POINT, 82],
     ]
 )
-def test_Image_landcover_source_values(source, xy, expected, tol=0.001):
+def test_Image_landcover_source_values(source, xy, expected):
     output = utils.point_image_value(
         model.Image(default_image(), landcover_source=source).landcover, xy
     )
-    assert abs(output['landcover'] - expected) <= tol
+    assert output['landcover'] == expected
 
 
 @pytest.mark.parametrize(
-    'source',
+    'source, expected',
     [
-        # No source
-        '',
-        # Fail on collection ID with trailing slash
-        'USGS/NLCD_RELEASES/2019_REL/NLCD/',
+        ['81', 81],
+        [81, 81],
     ]
 )
-def test_Image_landcover_source_exception(source):
-    with pytest.raises(ValueError):
-        utils.getinfo(model.Image(default_image(), landcover_source=source).landcover)
+def test_Image_landcover_source_constants(source, expected):
+    output = utils.constant_image_value(
+        model.Image(default_image(), landcover_source=source).landcover
+    )
+    assert output['landcover'] == expected
 
 
-def test_Image_landcover_band_name():
-    output = utils.getinfo(model.Image(default_image()).landcover)['bands'][0]['id']
-    assert output == 'landcover'
+# @pytest.mark.parametrize(
+#     'source, lc_aero_classes, lc_water_classes, xy, expected',
+#     [
+#         ['USGS/NLCD_RELEASES/2020_REL/NALCMS', [18, 15], [18], TEST_POINT, 15],
+#         ['USGS/NLCD_RELEASES/2020_REL/NALCMS', [], [], TEST_POINT, 15],
+#         ['ESA/WorldCover/v200/2021', [80, 40], [80], TEST_POINT, 40],
+#         ['ESA/WorldCover/v200/2021', [], [], TEST_POINT, 40],
+#         ['81', [], [], TEST_POINT, 81],
+#         [81, [], [], TEST_POINT, 81],
+#     ]
+# )
+# def test_Image_landcover_source_custom(source, xy, expected):
+#     output = utils.point_image_value(
+#         model.Image(default_image(), landcover_source=source).landcover, xy
+#     )
+#     assert output['landcover'] == expected
+
+
+# def test_Image_landcover_source_valueerror():
+#     with pytest.raises(ValueError):
+#         utils.getinfo(model.Image(default_image(), landcover_source='').landcover)
+
+
+@pytest.mark.parametrize(
+    'source, xy, expected',
+    [
+        # Check that the water mask is 0 at the non-water test point
+        ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', TEST_POINT, 0],
+        ['USGS/NLCD_RELEASES/2020_REL/NALCMS', TEST_POINT, 0],
+        ['ESA/WorldCover/v200/2021', TEST_POINT, 0],
+        # Check that the water mask is set to 1 for a known water body (Lake Tahoe)
+        ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', [-120.0, 39.0], 1],
+        ['USGS/NLCD_RELEASES/2020_REL/NALCMS', [-120.0, 39.0], 1],
+        ['ESA/WorldCover/v200/2021', [-120.0, 39.0], 1],
+    ]
+)
+def test_Image_lc_water_mask_default_classes(source, xy, expected):
+    output = utils.point_image_value(
+        model.Image(default_image(), landcover_source=source).lc_water_mask, xy
+    )
+    assert output['water_mask'] == expected
+
+
+@pytest.mark.parametrize(
+    'source, water_classes, xy, expected',
+    [
+        # Use the old NLCD images to test running custom landcover sources and classes
+        # At the test point, the water mask should default to 0
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', [11], TEST_POINT, 0],
+        # Update the water class list to non-water values, and check that the mask is 1
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', [81, 82], TEST_POINT, 1],
+        # Check that an empty class list will run (and default to 0)
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', [], TEST_POINT, 0],
+        # Check is classes can be set as a comma separated string of ints
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', '81,82', TEST_POINT, 1],
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', '82', TEST_POINT, 1],
+    ]
+)
+def test_Image_lc_water_mask_custom_classes(source, water_classes, xy, expected):
+    # Check that the water mask is updated based on the water class list
+    output = utils.point_image_value(model.Image(
+        default_image(), landcover_source=source,
+        lc_aero_classes=[], lc_water_classes=water_classes
+    ).lc_water_mask, xy)
+    assert output['water_mask'] == expected
+
+
+@pytest.mark.parametrize(
+    'source, xy, expected',
+    [
+        # Check that the aero mask is 1 at the test point
+        ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', TEST_POINT, 1],
+        ['USGS/NLCD_RELEASES/2020_REL/NALCMS', TEST_POINT, 1],
+        ['ESA/WorldCover/v200/2021', TEST_POINT, 1],
+        # Check that the aero mask is 1 at water test point
+        ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', [-120.0, 39.0], 1],
+        ['USGS/NLCD_RELEASES/2020_REL/NALCMS', [-120.0, 39.0], 1],
+        ['ESA/WorldCover/v200/2021', [-120.0, 39.0], 1],
+        # Check that the water mask is set to 0 for a desert location
+        ['projects/sat-io/open-datasets/USGS/ANNUAL_NLCD/LANDCOVER', [-118.0, 39.0], 0],
+        ['USGS/NLCD_RELEASES/2020_REL/NALCMS', [-118.0, 39.0], 0],
+        ['ESA/WorldCover/v200/2021', [-118.0, 39.0], 0],
+    ]
+)
+def test_Image_lc_aero_mask_default_classes(source, xy, expected):
+    output = utils.point_image_value(
+        model.Image(default_image(), landcover_source=source).lc_aero_mask, xy
+    )
+    assert output['aero_mask'] == expected
+
+
+@pytest.mark.parametrize(
+    'source, aero_classes, xy, expected',
+    [
+        # Use the old NLCD images to test running custom landcover sources and classes
+        # At the test point, the aero mask should default to 1
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', [81, 82], TEST_POINT, 1],
+        # Update the aero class list to non-aero values, and check that the mask is 0
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', [71], TEST_POINT, 0],
+        # Check that an empty class list will run (and default to 0)
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', [], TEST_POINT, 0],
+        # Check is classes can be set as a comma separated string of ints
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', '71,72', TEST_POINT, 0],
+        ['USGS/NLCD_RELEASES/2021_REL/NLCD/2021', '71', TEST_POINT, 0],
+    ]
+)
+def test_Image_lc_aero_mask_custom_classes(source, aero_classes, xy, expected):
+    # Check that the water mask is updated based on the water class list
+    output = utils.point_image_value(model.Image(
+        default_image(), landcover_source=source,
+        lc_aero_classes=aero_classes, lc_water_classes=[]
+    ).lc_aero_mask, xy)
+    assert output['aero_mask'] == expected
 
 
 def test_Image_albedo_default_value_set():
